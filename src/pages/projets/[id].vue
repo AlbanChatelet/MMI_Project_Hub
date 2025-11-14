@@ -13,23 +13,21 @@ const error = ref(null);
 
 onMounted(async () => {
   try {
-
     // 1) Récupérer le projet
     projet.value = await pb.collection("Projet").getOne(projetId);
 
-    // 2) Récupérer les étapes de ce projet
-    etapes.value = await pb.collection("Etape").getFullList({
-      filter: `projet = "${projetId}"`,
-      sort: "date_debut"
-    });
+    // 2) TEST : récupérer toutes les étapes sans filtre
+    etapes.value = await pb.collection("Etape").getFullList();
+    // (juste pour voir si ça plante encore ou pas)
 
   } catch (err) {
     console.error(err);
-    error.value = err.message;
+    error.value = err.message || "Erreur lors du chargement du projet";
   } finally {
     loading.value = false;
   }
 });
+
 </script>
 
 <template>
