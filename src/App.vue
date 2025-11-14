@@ -22,55 +22,21 @@ onMounted(async () => {
 
 
 <template>
-  <main class="max-w-5xl mx-auto py-12 px-6">
+  <div class="min-h-screen bg-gray-50">
+    <header class="border-b bg-white">
+      <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+        <h1 class="text-xl font-semibold text-gray-900">
+          MMI Project Hub
+        </h1>
 
-    <h1 class="text-4xl font-bold text-gray-900 mb-10">
-      MMI Project Hub – Projets
-    </h1>
-
-    <!-- Chargement -->
-    <p v-if="loading" class="text-gray-500 text-lg">
-      Chargement des projets...
-    </p>
-
-    <!-- Erreur -->
-    <p v-else-if="error" class="text-red-600 text-lg font-medium">
-      {{ error }}
-    </p>
-
-    <!-- Liste des projets -->
-    <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-      <div
-        v-for="projet in projets"
-        :key="projet.id"
-        class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-lg transition-shadow duration-200"
-      >
-        <h2 class="text-xl font-semibold text-gray-800">
-          {{ projet.titre || "(Sans titre)" }}
-        </h2>
-
-        <p class="text-gray-600 mt-2 line-clamp-3">
-          {{ projet.description }}
-        </p>
-
-        <div class="mt-4 flex justify-between items-center">
-          <span class="text-sm text-gray-400">ID : {{ projet.id }}</span>
-
-          <button
-            class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Voir plus
-          </button>
-        </div>
+        <nav class="space-x-4 text-sm">
+          <RouterLink to="/" class="text-gray-600 hover:text-gray-900">
+            Accueil
+          </RouterLink>
+        </nav>
       </div>
-    </div>
+    </header>
 
-    <!-- Aucun projet -->
-    <p
-      v-if="!loading && !error && projets.length === 0"
-      class="text-gray-500 mt-10 text-lg"
-    >
-      Aucun projet trouvé dans PocketBase.
-    </p>
-  </main>
+    <RouterView />
+  </div>
 </template>
