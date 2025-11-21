@@ -1,6 +1,7 @@
+<!-- eslint-disable vue/multi-word-component-names -->
 <script setup>
 import { ref, onMounted } from "vue";
-import { pb } from "../../pb"; // <-- adapte si ton pb.js est ailleurs
+import { pb } from "../pb"; // <-- adapte si ton pb.js est ailleurs
 
 const projets = ref([]);
 const loading = ref(true);
