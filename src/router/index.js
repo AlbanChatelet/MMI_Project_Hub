@@ -3,6 +3,7 @@ import HomeView from '../pages/index.vue'
 import ProjetDetail from '../pages/projets/[id].vue'
 import ComponentTest from '../pages/component_test.vue'
 import Login from '@/pages/login.vue'
+import ProposerProjet from '@/pages/proposer_projet.vue'
 
 const routes = [
   {
@@ -24,6 +25,11 @@ const routes = [
     path: '/login',
     name: 'login',
     component: Login
+  },
+  {
+    path: '/proposer_projet',
+    name: 'proposer_projet',
+    component: ProposerProjet
   }
 ]
 

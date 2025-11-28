@@ -6,14 +6,13 @@
       <h2 class="text-2xl text-white font-bold
        mb-4 text-center">Vous êtes une entreprise :</h2>
       <p class="mb-6 text-white text-center">Soumettez une proposition de projet que nous étudierons et proposerons aux étudiants</p>
-      <form class="w-full space-y-4">
-        <button
-          type="submit"
-          class="w-full bg-[#CCFFBC] text-black p-3 rounded-lg hover:bg-[#B8E6A8] transition"
+        <a
+          href="/proposer_projet"
+          class="block w-full bg-[#CCFFBC] text-black p-3 rounded-lg text-center hover:bg-[#B8E6A8] transition"
         >
-          Soumettre
-        </button>
-      </form>
+          Soumettre un projet
+        </a>
+
     </div>
 
     <!-- Section connexion (2/3 de l'écran) -->
