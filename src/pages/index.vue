@@ -10,7 +10,7 @@ const error = ref(null);
 onMounted(async () => {
   try {
     // ⚠️ adapte "Projet" si le nom de ta collection est différent
-    projets.value = await pb.collection("Projet").getFullList({
+    projets.value = await pb.collection("Projets").getFullList({
       sort: "-created",
     });
   } catch (err) {
