@@ -33,6 +33,9 @@ onMounted(async () => {
           <RouterLink to="/" class="text-gray-600 hover:text-gray-900">
             Accueil
           </RouterLink>
+          <RouterLink to="/login" class="text-gray-600 hover:text-gray-900">
+            Login
+          </RouterLink>
         </nav>
       </div>
     </header>
