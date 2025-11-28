@@ -14,7 +14,7 @@ const error = ref(null);
 onMounted(async () => {
   try {
     // 1) Récupérer le projet
-    projet.value = await pb.collection("Projets").getOne(projetId);
+    projet.value = await pb.collection("Projet").getOne(projetId);
 
     // 2) TEST : récupérer toutes les étapes sans filtre
     etapes.value = await pb.collection("Etapes").getFullList();
