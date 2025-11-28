@@ -7,21 +7,6 @@
        mb-4 text-center">Vous êtes une entreprise :</h2>
       <p class="mb-6 text-white text-center">Soumettez une proposition de projet que nous étudierons et proposerons aux étudiants</p>
       <form class="w-full space-y-4">
-        <input
-          type="text"
-          placeholder="Nom de l'entreprise"
-          class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-        />
-        <input
-          type="text"
-          placeholder="Titre du projet"
-          class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-        />
-        <textarea
-          placeholder="Description du projet"
-          class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-          rows="4"
-        ></textarea>
         <button
           type="submit"
           class="w-full bg-[#CCFFBC] text-black p-3 rounded-lg hover:bg-[#B8E6A8] transition"
