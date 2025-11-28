@@ -14,10 +14,10 @@ const error = ref(null);
 onMounted(async () => {
   try {
     // 1) Récupérer le projet
-    projet.value = await pb.collection("Projet").getOne(projetId);
+    projet.value = await pb.collection("Projets").getOne(projetId);
 
     // 2) TEST : récupérer toutes les étapes sans filtre
-    etapes.value = await pb.collection("Etape").getFullList();
+    etapes.value = await pb.collection("Etapes").getFullList();
     // (juste pour voir si ça plante encore ou pas)
 
   } catch (err) {
