@@ -1,3 +1,4 @@
+<!-- eslint-disable vue/multi-word-component-names -->
 <script setup>
 import { ref, onMounted } from "vue";
 import { pb } from "../../pb"; // <-- adapte si ton pb.js est ailleurs
