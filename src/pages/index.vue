@@ -2,6 +2,7 @@
 <script setup>
 import { ref, onMounted } from "vue";
 import { pb } from "../pb";
+import HeaderMain from "../components/HeaderMain.vue";
 
 const projets = ref([]);
 const groupes = ref([]);
@@ -30,11 +31,9 @@ const getGroupeMembres = (projetId) => {
   return membres;
 };
 
-// Format "Prénom NOM, Prénom NOM, ..."
 const formatMembres = (projetId) => {
-  const membres = getGroupeMembres(projetId);
-  return membres
-    .map((m) => m.name || m.username || m.email || "Membre")
+  return getGroupeMembres(projetId)
+    .map((m) => m.name || m.username || m.email)
     .join(", ");
 };
 
@@ -42,9 +41,7 @@ onMounted(async () => {
   try {
     const [projetsRes, groupesRes] = await Promise.all([
       pb.collection("Projet").getFullList({ sort: "-created" }),
-      pb.collection("Groupe").getFullList({
-        expand: "membres",
-      }),
+      pb.collection("Groupe").getFullList({ expand: "membres" }),
     ]);
 
     projets.value = projetsRes;
@@ -59,89 +56,73 @@ onMounted(async () => {
 </script>
 
 <template>
-  <main class="min-h-screen bg-slate-950">
-    <section class="max-w-6xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-      <h2 class="text-3xl sm:text-4xl font-bold text-white mb-8">
-        Projets
-      </h2>
+  <!-- Wrapper global avec fond -->
+  <div class="w-full h-screen overflow-hidden bg-black relative">
+    <!-- Header flottant -->
+    <HeaderMain />
 
-      <!-- Chargement -->
-      <p v-if="loading" class="text-slate-300">
-        Chargement des projets...
+    <!-- Grille plein écran -->
+    <main class="w-full h-full">
+      <!-- Loading -->
+      <p v-if="loading" class="text-white text-center mt-10 text-xl">
+        Chargement...
       </p>
 
       <!-- Erreur -->
-      <p v-else-if="error" class="text-red-400 font-medium">
+      <p v-else-if="error" class="text-red-500 text-center mt-10 text-xl">
         {{ error }}
       </p>
 
-      <!-- Liste des projets -->
-      <div v-else>
-        <div
-          v-if="projets.length > 0"
-          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+      <!-- Grille 1x4 -->
+      <div
+        v-else
+        class="grid grid-cols-1 md:grid-cols-4 grid-rows-1 w-full h-full"
+      >
+        <RouterLink
+          v-for="projet in projets"
+          :key="projet.id"
+          :to="`/projets/${projet.id}`"
+          class="relative group overflow-hidden h-full"
         >
-          <!-- Carte projet façon maquette -->
-          <RouterLink
-            v-for="projet in projets"
-            :key="projet.id"
-            :to="`/projets/${projet.id}`"
-            class="group relative block h-[320px] sm:h-[380px] lg:h-[480px] rounded-2xl overflow-hidden shadow-lg"
+          <!-- Image -->
+          <img
+            v-if="projet.apercu"
+            :src="pb.files.getUrl(projet, projet.apercu)"
+            class="absolute inset-0 w-full h-full object-cover transform group-hover:scale-110 transition duration-700"
+            alt="Aperçu du projet"
+          />
+
+          <div
+            v-else
+            class="absolute inset-0 bg-gray-800 flex items-center justify-center text-white"
           >
-            <!-- Image de fond -->
-            <img
-              v-if="projet.apercu"
-              :src="pb.files.getUrl(projet, projet.apercu)"
-              alt="Aperçu du projet"
-              class="absolute inset-0 w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
-            />
-            <!-- Si pas d'image, petit fond de secours -->
-            <div
-              v-else
-              class="absolute inset-0 bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-slate-300 text-sm"
+            Aucun aperçu
+          </div>
+
+          <!-- Overlay sombre -->
+          <div
+            class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"
+          ></div>
+
+          <!-- Contenu en bas -->
+          <div class="absolute bottom-0 left-0 right-0 p-4">
+            <h3 class="text-white text-2xl font-bold drop-shadow-lg">
+              {{ projet.titre }}
+            </h3>
+
+            <p v-if="getGroupeNom(projet.id)" class="text-white/90 text-sm mt-1">
+              {{ getGroupeNom(projet.id) }}
+            </p>
+
+            <p
+              v-if="getGroupeMembres(projet.id).length"
+              class="text-white/80 text-xs mt-1 leading-snug"
             >
-              Aucun aperçu
-            </div>
-
-            <!-- Overlay sombre -->
-            <div
-              class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"
-            />
-
-            <!-- Contenu en bas -->
-            <div class="absolute inset-x-0 bottom-0 p-4 sm:p-6">
-              <h3
-                class="text-xl sm:text-2xl font-semibold text-lime-300 mb-1 sm:mb-2"
-              >
-                {{ projet.titre || "(Sans titre)" }}
-              </h3>
-
-              <!-- Groupe -->
-              <p
-                v-if="getGroupeNom(projet.id)"
-                class="text-xs sm:text-sm text-slate-100 mb-1"
-              >
-                {{ getGroupeNom(projet.id) }}
-              </p>
-
-              <!-- Membres -->
-              <p
-                v-if="getGroupeMembres(projet.id).length"
-                class="flex items-start text-[11px] sm:text-xs text-slate-100"
-              >
-                <span class="mr-2 mt-0.5">👤</span>
-                <span class="leading-snug">
-                  {{ formatMembres(projet.id) }}
-                </span>
-              </p>
-            </div>
-          </RouterLink>
-        </div>
-
-        <p v-else class="text-slate-300 mt-4">
-          Aucun projet trouvé dans PocketBase.
-        </p>
+              👤 {{ formatMembres(projet.id) }}
+            </p>
+          </div>
+        </RouterLink>
       </div>
-    </section>
-  </main>
+    </main>
+  </div>
 </template>
