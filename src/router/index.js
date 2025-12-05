@@ -4,6 +4,7 @@ import ProjetDetail from '../pages/projets/[id].vue'
 import ComponentTest from '../pages/component_test.vue'
 import Login from '@/pages/login.vue'
 import ProposerProjet from '@/pages/proposer_projet.vue'
+import Register from "@/pages/register.vue"
 
 const routes = [
   {
@@ -30,7 +31,12 @@ const routes = [
     path: '/proposer_projet',
     name: 'proposer_projet',
     component: ProposerProjet
-  }
+  },
+  {
+  path: "/register",
+  name: "register",
+  component: Register
+}
 ]
 
 export const router = createRouter({
