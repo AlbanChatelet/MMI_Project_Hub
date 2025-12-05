@@ -23,22 +23,7 @@ onMounted(async () => {
 
 <template>
   <div class="min-h-screen bg-gray-50">
-    <header class="border-b bg-white">
-      <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-        <h1 class="text-xl font-semibold text-gray-900">
-          MMI Project Hub
-        </h1>
-
-        <nav class="space-x-4 text-sm">
-          <RouterLink to="/" class="text-gray-600 hover:text-gray-900">
-            Accueil
-          </RouterLink>
-          <RouterLink to="/login" class="text-gray-600 hover:text-gray-900">
-            Login
-          </RouterLink>
-        </nav>
-      </div>
-    </header>
+    
 
     <RouterView />
   </div>
