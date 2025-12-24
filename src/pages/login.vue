@@ -86,11 +86,11 @@ const login = async () => {
 
     // Redirection selon le rôle
     if (role === "admin") {
-      router.push("/admin/dashboard")
+      router.push("/admin-dashboard")
     } else if (role === "enseignant") {
-      router.push("/enseignant/dashboard")
+      router.push("/enseignant-dashboard")
     } else {
-      router.push("/eleve/dashboard")
+      router.push("/eleve-dashboard")
     }
   } catch (e) {
     errorMessage.value = "Email ou mot de passe incorrect."
