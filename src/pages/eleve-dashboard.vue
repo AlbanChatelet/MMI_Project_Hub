@@ -1,19 +1,20 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <script setup>
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 import { pb } from "../pb";
 
 const user = ref(pb.authStore.model);
 const promotion = ref(null);
 
-// Groupes où l'utilisateur est membre (avec expand projet)
-const groupes = ref([]);
-
-// Cache des promotions (id -> record Promotion)
-const promotionsById = ref({});
+const groupes = ref([]); // groupes où l'utilisateur est membre (expand projet)
+const promotionsById = ref({}); // cache promotions
 
 const loading = ref(true);
 const error = ref(null);
+
+// ✅ Filtres
+const selectedAnnee = ref(""); // "" | "1" | "2" | "3"
+const selectedParcours = ref(""); // "" | "dev" | "créa" | "com"
 
 const parcoursLabel = (parcours) => {
   const map = {
@@ -32,39 +33,46 @@ const anneeLabel = (annee) => {
   return `Année ${annee}`;
 };
 
+// Si tu changes l'année, on reset le parcours si besoin (optionnel)
+// (en vrai ils sont liés via le filtrage, mais ça évite de rester sur un parcours sans résultat)
+watch(selectedAnnee, () => {
+  // pas obligatoire, mais souvent plus "logique" UX
+  // selectedParcours.value = "";
+});
+
 onMounted(async () => {
   try {
     if (!pb.authStore.isValid || !pb.authStore.model?.id) {
       throw new Error("Utilisateur non connecté");
     }
 
-    // 1) Recharge le user
+    // 1) user
     user.value = await pb.collection("users").getOne(pb.authStore.model.id);
 
-    // 2) Promotion du user (par ID)
+    // 2) promotion user
     if (user.value.promotion) {
       promotion.value = await pb.collection("Promotion").getOne(user.value.promotion);
     }
 
-    // 3) Groupes du user + projet expand
+    // 3) groupes + expand projet
     groupes.value = await pb.collection("Groupe").getFullList({
       filter: `membres ?~ "${user.value.id}"`,
       sort: "created",
       expand: "projet",
     });
 
-    // 4) Récupère toutes les ids de promotions liées aux projets (Projet.promo)
+    // 4) récupère toutes les ids promo liées aux projets
     const promoIds = new Set();
     for (const g of groupes.value) {
       const p = g?.expand?.projet;
       if (!p) continue;
 
-      const rel = p.promo; // relation multiple -> array d'ids
+      const rel = p.promo;
       if (Array.isArray(rel)) rel.forEach((id) => promoIds.add(id));
       else if (typeof rel === "string" && rel) promoIds.add(rel);
     }
 
-    // 5) Fetch des promotions concernées
+    // 5) fetch promotions
     if (promoIds.size > 0) {
       const ids = Array.from(promoIds);
       const filter = ids.map((id) => `id="${id}"`).join(" || ");
@@ -92,22 +100,19 @@ const avatarUrl = computed(() => {
   return pb.files.getUrl(user.value, user.value.avatar);
 });
 
-// Texte promo user : "2023-2026 • 3ème année - Développement"
+// Texte promo user
 const promotionLabel = computed(() => {
   if (!promotion.value) return null;
 
-  const promoRange = promotion.value.promo; // ex: "2023-2026"
-  const annee = promotion.value.annee; // 1 / 2 / 3
-  const parcours = promotion.value.parcours; // dev / créa / com
+  const promoRange = promotion.value.promo;
+  const annee = promotion.value.annee;
+  const parcours = promotion.value.parcours;
 
   const anneeTxt =
-    annee === 1
-      ? "1ère année"
-      : annee === 2
-      ? "2ème année"
-      : annee === 3
-      ? "3ème année"
-      : `${annee}ème année`;
+    annee === 1 ? "1ère année" :
+    annee === 2 ? "2ème année" :
+    annee === 3 ? "3ème année" :
+    `${annee}ème année`;
 
   const parcoursTxt = parcoursLabel(parcours);
 
@@ -115,9 +120,21 @@ const promotionLabel = computed(() => {
   return `${anneeTxt} - ${parcoursTxt}`;
 });
 
-// ✅ Projets dédupliqués + image + années + parcours (depuis Projet.promo -> Promotion)
+// URL photo projet (champ "photo")
+const projetPhotoUrl = (projet) => {
+  if (!projet?.photo) return null;
+  return pb.files.getUrl(projet, projet.photo);
+};
+
+/**
+ * Construit la liste de projets (dédupliqués) avec :
+ * - projet
+ * - annees (["Année 1", ...])
+ * - parcours (["Développement", "Design", ...])
+ * - rawPromo (pour filtrer facilement : [{annee, parcours}, ...])
+ */
 const projetsDuUser = computed(() => {
-  const map = new Map(); // projetId -> { projet, annees[], parcours[] }
+  const map = new Map();
 
   for (const g of groupes.value) {
     const p = g?.expand?.projet;
@@ -127,27 +144,42 @@ const projetsDuUser = computed(() => {
 
     const anneesSet = new Set();
     const parcoursSet = new Set();
+    const rawPromo = []; // [{annee, parcours}]
 
     for (const promoId of promoRel) {
       const promoRecord = promotionsById.value[promoId];
       if (!promoRecord) continue;
 
-      if (promoRecord.annee) anneesSet.add(anneeLabel(promoRecord.annee));
-      if (promoRecord.parcours) parcoursSet.add(parcoursLabel(promoRecord.parcours));
+      if (promoRecord.annee) {
+        anneesSet.add(anneeLabel(promoRecord.annee));
+      }
+      if (promoRecord.parcours) {
+        parcoursSet.add(parcoursLabel(promoRecord.parcours));
+      }
+
+      rawPromo.push({
+        annee: promoRecord.annee,
+        parcours: promoRecord.parcours,
+      });
     }
 
     const payload = {
       projet: p,
-      annees: Array.from(anneesSet).sort(),   // ex: ["Année 1", "Année 2"]
-      parcours: Array.from(parcoursSet),      // ex: ["Développement", "Design"]
+      annees: Array.from(anneesSet).sort(),
+      parcours: Array.from(parcoursSet),
+      rawPromo,
     };
 
     if (!map.has(p.id)) map.set(p.id, payload);
     else {
-      // merge si déjà présent
       const existing = map.get(p.id);
+
       existing.annees = Array.from(new Set([...existing.annees, ...payload.annees])).sort();
       existing.parcours = Array.from(new Set([...existing.parcours, ...payload.parcours]));
+
+      // merge rawPromo
+      existing.rawPromo = [...existing.rawPromo, ...payload.rawPromo];
+
       map.set(p.id, existing);
     }
   }
@@ -155,16 +187,32 @@ const projetsDuUser = computed(() => {
   return Array.from(map.values());
 });
 
-// URL photo projet (champ "photo" dans Projet)
-const projetPhotoUrl = (projet) => {
-  if (!projet?.photo) return null;
-  return pb.files.getUrl(projet, projet.photo);
-};
+// ✅ Liste filtrée selon année + parcours (liés)
+const projetsFiltres = computed(() => {
+  const annee = selectedAnnee.value || "";       // "1" | "2" | "3" | ""
+  const parcours = selectedParcours.value || ""; // "dev" | "créa" | "com" | ""
+
+  // Pas de filtre -> tout
+  if (!annee && !parcours) return projetsDuUser.value;
+
+  return projetsDuUser.value.filter((item) => {
+    return item.rawPromo.some((rp) => {
+      const rpAnnee = rp.annee != null ? String(rp.annee) : "";
+      const rpParcours = rp.parcours != null ? String(rp.parcours) : "";
+
+      const okAnnee = annee ? rpAnnee === annee : true;
+      const okParcours = parcours ? rpParcours === parcours : true;
+
+      return okAnnee && okParcours;
+    });
+  });
+});
+
 </script>
 
 <template>
   <main class="min-h-screen flex items-center justify-center bg-gray-50">
-    <div class="bg-white p-8 rounded-xl shadow-md text-center w-[32rem]">
+    <div class="bg-white p-8 rounded-xl shadow-md text-center w-[36rem]">
       <h1 class="text-3xl font-bold mb-6">Dashboard Élève</h1>
 
       <p v-if="loading" class="text-gray-500">Chargement...</p>
@@ -200,17 +248,62 @@ const projetPhotoUrl = (projet) => {
           Promotion non renseignée
         </p>
 
-        <!-- ✅ Projets + photo + années + parcours -->
-        <div class="mt-6 text-left">
-          <p class="text-sm font-medium text-gray-700 mb-2">Mes projets :</p>
+        <!-- ✅ FILTRES -->
+        <div class="mt-6 text-left border rounded-lg p-3 bg-gray-50">
+          <p class="text-sm font-medium text-gray-700 mb-2">Filtrer les projets :</p>
 
-          <div v-if="projetsDuUser.length" class="space-y-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- Filtre année -->
+            <div>
+              <label class="block text-xs text-gray-600 mb-1">Année</label>
+              <select
+                v-model="selectedAnnee"
+                class="w-full border rounded-md px-2 py-2 text-sm bg-white"
+              >
+                <option value="">Toutes</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+              </select>
+            </div>
+
+            <!-- Filtre parcours -->
+            <div>
+              <label class="block text-xs text-gray-600 mb-1">Parcours</label>
+              <select
+                v-model="selectedParcours"
+                class="w-full border rounded-md px-2 py-2 text-sm bg-white"
+              >
+                <option value="">Tous</option>
+                <option value="dev">Développement</option>
+                <option value="créa">Design</option>
+                <option value="com">Communication</option>
+              </select>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            class="mt-3 text-xs text-blue-600 hover:underline"
+            @click="selectedAnnee = ''; selectedParcours = ''"
+          >
+            Réinitialiser les filtres
+          </button>
+        </div>
+
+        <!-- ✅ Projets filtrés -->
+        <div class="mt-5 text-left">
+          <p class="text-sm font-medium text-gray-700 mb-2">
+            Mes projets <span class="text-gray-400">({{ projetsFiltres.length }})</span> :
+          </p>
+
+          <div v-if="projetsFiltres.length" class="space-y-3">
             <div
-              v-for="item in projetsDuUser"
+              v-for="item in projetsFiltres"
               :key="item.projet.id"
               class="flex gap-3 items-start border rounded-lg p-3"
             >
-              <!-- Photo projet -->
+              <!-- Photo -->
               <img
                 v-if="projetPhotoUrl(item.projet)"
                 :src="projetPhotoUrl(item.projet)"
@@ -224,7 +317,6 @@ const projetPhotoUrl = (projet) => {
                 Pas de photo
               </div>
 
-              <!-- Infos projet -->
               <div class="flex-1">
                 <div class="flex items-start gap-2">
                   <p class="font-semibold text-gray-900">
@@ -263,7 +355,7 @@ const projetPhotoUrl = (projet) => {
           </div>
 
           <p v-else class="text-sm text-gray-400">
-            Aucun projet lié à tes groupes
+            Aucun projet ne correspond à ces filtres.
           </p>
         </div>
       </template>
