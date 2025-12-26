@@ -1,5 +1,6 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <script setup>
+import AppHeader from '@/components/AppHeader.vue'
 import { ref, onMounted, computed } from "vue";
 import { pb } from "../pb";
 
@@ -179,6 +180,8 @@ const displayName = computed(() => user.value?.name || user.value?.username || "
 </script>
 
 <template>
+  
+    <AppHeader />
   <div class="min-h-screen bg-[#151A24] text-white">
     <!-- Container -->
     <div class="max-w-6xl mx-auto px-6 py-10">
