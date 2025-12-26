@@ -5,6 +5,7 @@ import { pb } from "../pb";
 
 const user = ref(pb.authStore.model);
 const promotion = ref(null);
+const groupes = ref([]); // ✅ plusieurs groupes
 
 const loading = ref(true);
 const error = ref(null);
@@ -15,13 +16,21 @@ onMounted(async () => {
       throw new Error("Utilisateur non connecté");
     }
 
-    // 1) Recharge le user (au cas où authStore.model est incomplet)
+    // 1) Recharge le user (authStore.model peut être incomplet)
     user.value = await pb.collection("users").getOne(pb.authStore.model.id);
 
-    // 2) Si le user a une promotion (id), on récupère l'enregistrement Promotion
+    // 2) Promotion (par ID)
     if (user.value.promotion) {
-      promotion.value = await pb.collection("Promotion").getOne(user.value.promotion);
+      promotion.value = await pb
+        .collection("Promotion")
+        .getOne(user.value.promotion);
     }
+
+    // 3) ✅ Récupère TOUS les groupes où l'utilisateur est membre
+    groupes.value = await pb.collection("Groupe").getFullList({
+      filter: `membres ?~ "${user.value.id}"`,
+      sort: "nom",
+    });
   } catch (e) {
     console.error(e);
     error.value = e.message || "Erreur lors du chargement du profil";
@@ -36,18 +45,22 @@ const avatarUrl = computed(() => {
   return pb.files.getUrl(user.value, user.value.avatar);
 });
 
-// Texte “3ème année - Développement”
+// Texte promo : "2023-2026 • 3ème année - Développement"
 const promotionLabel = computed(() => {
   if (!promotion.value) return null;
 
-  const annee = promotion.value.annee;       // 1 / 2 / 3
+  const promoRange = promotion.value.promo; // ex: "2023-2026"
+  const annee = promotion.value.annee; // 1 / 2 / 3
   const parcours = promotion.value.parcours; // dev / créa / com
 
   const anneeLabel =
-    annee === 1 ? "1ère année" :
-    annee === 2 ? "2ème année" :
-    annee === 3 ? "3ème année" :
-    `${annee}ème année`;
+    annee === 1
+      ? "1ère année"
+      : annee === 2
+      ? "2ème année"
+      : annee === 3
+      ? "3ème année"
+      : `${annee}ème année`;
 
   const parcoursMap = {
     dev: "Développement",
@@ -58,6 +71,7 @@ const promotionLabel = computed(() => {
 
   const parcoursLabel = parcoursMap[parcours] || parcours;
 
+  if (promoRange) return `${promoRange} • ${anneeLabel} - ${parcoursLabel}`;
   return `${anneeLabel} - ${parcoursLabel}`;
 });
 </script>
@@ -99,6 +113,22 @@ const promotionLabel = computed(() => {
         <p v-else class="text-sm text-gray-400 mt-2">
           Promotion non renseignée
         </p>
+
+        <!-- ✅ Groupes (liste) -->
+        <div class="mt-3 text-left">
+          <p class="text-sm font-medium text-gray-700 mb-1">Groupes :</p>
+
+          <ul v-if="groupes.length" class="text-sm text-gray-600 space-y-1">
+            <li v-for="g in groupes" :key="g.id" class="flex items-center gap-2">
+              <span class="text-gray-400">•</span>
+              <span class="font-medium">{{ g.nom }}</span>
+            </li>
+          </ul>
+
+          <p v-else class="text-sm text-gray-400">
+            Groupe non renseigné
+          </p>
+        </div>
       </template>
     </div>
   </main>
