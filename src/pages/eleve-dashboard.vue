@@ -25,6 +25,13 @@ const parcoursLabel = (parcours) => {
   return map[parcours] || parcours;
 };
 
+const anneeLabel = (annee) => {
+  if (annee === 1) return "Année 1";
+  if (annee === 2) return "Année 2";
+  if (annee === 3) return "Année 3";
+  return `Année ${annee}`;
+};
+
 onMounted(async () => {
   try {
     if (!pb.authStore.isValid || !pb.authStore.model?.id) {
@@ -52,17 +59,14 @@ onMounted(async () => {
       const p = g?.expand?.projet;
       if (!p) continue;
 
-      // Projet.promo = relation multiple -> tableau d'ids
-      const rel = p.promo;
+      const rel = p.promo; // relation multiple -> array d'ids
       if (Array.isArray(rel)) rel.forEach((id) => promoIds.add(id));
       else if (typeof rel === "string" && rel) promoIds.add(rel);
     }
 
-    // 5) Fetch en une fois des promotions concernées (si il y en a)
+    // 5) Fetch des promotions concernées
     if (promoIds.size > 0) {
       const ids = Array.from(promoIds);
-
-      // construit un filter : id="..." OR id="..." ...
       const filter = ids.map((id) => `id="${id}"`).join(" || ");
 
       const promos = await pb.collection("Promotion").getFullList({
@@ -70,7 +74,6 @@ onMounted(async () => {
         fields: "id,parcours,annee,promo,presentable",
       });
 
-      // met en cache
       const map = {};
       for (const pr of promos) map[pr.id] = pr;
       promotionsById.value = map;
@@ -89,7 +92,7 @@ const avatarUrl = computed(() => {
   return pb.files.getUrl(user.value, user.value.avatar);
 });
 
-// Texte promo : "2023-2026 • 3ème année - Développement"
+// Texte promo user : "2023-2026 • 3ème année - Développement"
 const promotionLabel = computed(() => {
   if (!promotion.value) return null;
 
@@ -97,7 +100,7 @@ const promotionLabel = computed(() => {
   const annee = promotion.value.annee; // 1 / 2 / 3
   const parcours = promotion.value.parcours; // dev / créa / com
 
-  const anneeLabel =
+  const anneeTxt =
     annee === 1
       ? "1ère année"
       : annee === 2
@@ -108,50 +111,60 @@ const promotionLabel = computed(() => {
 
   const parcoursTxt = parcoursLabel(parcours);
 
-  if (promoRange) return `${promoRange} • ${anneeLabel} - ${parcoursTxt}`;
-  return `${anneeLabel} - ${parcoursTxt}`;
+  if (promoRange) return `${promoRange} • ${anneeTxt} - ${parcoursTxt}`;
+  return `${anneeTxt} - ${parcoursTxt}`;
 });
 
-// ✅ Projets dédupliqués + leurs parcours (badges)
+// ✅ Projets dédupliqués + image + années + parcours (depuis Projet.promo -> Promotion)
 const projetsDuUser = computed(() => {
-  const map = new Map(); // id -> { projet, parcoursLabels[] }
+  const map = new Map(); // projetId -> { projet, annees[], parcours[] }
 
   for (const g of groupes.value) {
     const p = g?.expand?.projet;
     if (!p?.id) continue;
 
-    // calcule les parcours depuis Projet.promo (ids Promotion)
     const promoRel = Array.isArray(p.promo) ? p.promo : p.promo ? [p.promo] : [];
+
+    const anneesSet = new Set();
     const parcoursSet = new Set();
 
     for (const promoId of promoRel) {
       const promoRecord = promotionsById.value[promoId];
-      if (promoRecord?.parcours) parcoursSet.add(parcoursLabel(promoRecord.parcours));
+      if (!promoRecord) continue;
+
+      if (promoRecord.annee) anneesSet.add(anneeLabel(promoRecord.annee));
+      if (promoRecord.parcours) parcoursSet.add(parcoursLabel(promoRecord.parcours));
     }
 
     const payload = {
       projet: p,
-      parcours: Array.from(parcoursSet),
+      annees: Array.from(anneesSet).sort(),   // ex: ["Année 1", "Année 2"]
+      parcours: Array.from(parcoursSet),      // ex: ["Développement", "Design"]
     };
 
-    // dédupe (si plusieurs groupes pointent vers le même projet)
     if (!map.has(p.id)) map.set(p.id, payload);
     else {
-      // merge parcours si déjà présent
+      // merge si déjà présent
       const existing = map.get(p.id);
-      for (const lab of payload.parcours) existing.parcours.push(lab);
-      existing.parcours = Array.from(new Set(existing.parcours));
+      existing.annees = Array.from(new Set([...existing.annees, ...payload.annees])).sort();
+      existing.parcours = Array.from(new Set([...existing.parcours, ...payload.parcours]));
       map.set(p.id, existing);
     }
   }
 
   return Array.from(map.values());
 });
+
+// URL photo projet (champ "photo" dans Projet)
+const projetPhotoUrl = (projet) => {
+  if (!projet?.photo) return null;
+  return pb.files.getUrl(projet, projet.photo);
+};
 </script>
 
 <template>
   <main class="min-h-screen flex items-center justify-center bg-gray-50">
-    <div class="bg-white p-8 rounded-xl shadow-md text-center w-[28rem]">
+    <div class="bg-white p-8 rounded-xl shadow-md text-center w-[32rem]">
       <h1 class="text-3xl font-bold mb-6">Dashboard Élève</h1>
 
       <p v-if="loading" class="text-gray-500">Chargement...</p>
@@ -187,39 +200,67 @@ const projetsDuUser = computed(() => {
           Promotion non renseignée
         </p>
 
-        <!-- ✅ Projets + badges parcours -->
-        <div class="mt-5 text-left">
+        <!-- ✅ Projets + photo + années + parcours -->
+        <div class="mt-6 text-left">
           <p class="text-sm font-medium text-gray-700 mb-2">Mes projets :</p>
 
-          <ul v-if="projetsDuUser.length" class="space-y-2">
-            <li
+          <div v-if="projetsDuUser.length" class="space-y-3">
+            <div
               v-for="item in projetsDuUser"
               :key="item.projet.id"
-              class="flex items-center gap-2"
+              class="flex gap-3 items-start border rounded-lg p-3"
             >
-              <span class="font-medium text-gray-800">
-                {{ item.projet.titre || "(Sans titre)" }}
-              </span>
-
-              <!-- Badges parcours -->
-              <div class="flex gap-2 flex-wrap">
-                <span
-                  v-for="par in item.parcours"
-                  :key="par"
-                  class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border"
-                >
-                  {{ par }}
-                </span>
+              <!-- Photo projet -->
+              <img
+                v-if="projetPhotoUrl(item.projet)"
+                :src="projetPhotoUrl(item.projet)"
+                alt="Photo projet"
+                class="w-20 h-20 rounded-md object-cover border"
+              />
+              <div
+                v-else
+                class="w-20 h-20 rounded-md bg-gray-100 border flex items-center justify-center text-xs text-gray-400"
+              >
+                Pas de photo
               </div>
 
-              <RouterLink
-                :to="`/projets/${item.projet.id}`"
-                class="ml-auto text-xs text-blue-600 hover:underline"
-              >
-                Voir
-              </RouterLink>
-            </li>
-          </ul>
+              <!-- Infos projet -->
+              <div class="flex-1">
+                <div class="flex items-start gap-2">
+                  <p class="font-semibold text-gray-900">
+                    {{ item.projet.titre || "(Sans titre)" }}
+                  </p>
+
+                  <RouterLink
+                    :to="`/projets/${item.projet.id}`"
+                    class="ml-auto text-xs text-blue-600 hover:underline"
+                  >
+                    Voir
+                  </RouterLink>
+                </div>
+
+                <!-- Badges années -->
+                <div class="mt-1 flex flex-wrap gap-2">
+                  <span
+                    v-for="a in item.annees"
+                    :key="a"
+                    class="text-xs px-2 py-0.5 rounded-full bg-gray-50 text-gray-700 border"
+                  >
+                    {{ a }}
+                  </span>
+
+                  <!-- Badges parcours -->
+                  <span
+                    v-for="p in item.parcours"
+                    :key="p"
+                    class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border"
+                  >
+                    {{ p }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <p v-else class="text-sm text-gray-400">
             Aucun projet lié à tes groupes
