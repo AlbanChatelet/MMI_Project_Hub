@@ -61,42 +61,34 @@
 </template>
 
 <script setup lang="ts">
-import PocketBase from "pocketbase"
-import { ref } from "vue"
-import { useRouter } from "vue-router"
+import { ref } from "vue";
+import { useRouter } from "vue-router";
+import { pb } from "../pb"; // ✅ utilise la même instance !
 
-const router = useRouter()
+const router = useRouter();
 
-// URL PocketBase distant
-const pb = new PocketBase("https://mmi-api.albanchatelet.fr")
+const email = ref("");
+const password = ref("");
+const errorMessage = ref("");
 
-const email = ref("")
-const password = ref("")
-const errorMessage = ref("")
-
-// Fonction login
 const login = async () => {
-  errorMessage.value = ""
+  errorMessage.value = "";
 
   try {
-    const auth = await pb.collection("users").authWithPassword(email.value, password.value)
+    const auth = await pb
+      .collection("users")
+      .authWithPassword(email.value, password.value);
 
-    // Récupération du rôle (admin / enseignant / élève)
-    const role = auth.record.role
+    const role = auth.record.role;
 
-    // Redirection selon le rôle
-    if (role === "admin") {
-      router.push("/admin-dashboard")
-    } else if (role === "enseignant") {
-      router.push("/enseignant-dashboard")
-    } else {
-      router.push("/eleve-dashboard")
-    }
+    if (role === "admin") router.push("/admin-dashboard");
+    else if (role === "enseignant") router.push("/enseignant-dashboard");
+    else router.push("/eleve-dashboard");
   } catch (e) {
-    errorMessage.value = "Email ou mot de passe incorrect."
-    console.error("Erreur connexion :", e)
+    errorMessage.value = "Email ou mot de passe incorrect.";
+    console.error("Erreur connexion :", e);
   }
-}
+};
 </script>
 
 <style>
