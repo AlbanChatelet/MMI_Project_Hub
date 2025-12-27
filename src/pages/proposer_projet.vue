@@ -1,7 +1,7 @@
 <template>
+  <AppHeader />
   <div class="min-h-screen bg-[#0E1116] text-white px-6 py-10">
-    <!-- Logo -->
-    <img src="/src/assets/logo.svg" alt="MMI HUB" class="w-32 mb-12" />
+    
 
     <!-- Titre -->
     <h1 class="text-3xl font-bold mb-2">Proposer un projet</h1>
@@ -109,4 +109,5 @@
 </template>
 
 <script setup>
+import AppHeader from '@/components/AppHeader.vue'
 </script>

@@ -83,7 +83,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
         <nav class="mt-10 flex flex-col gap-10 text-2xl font-extrabold">
           <RouterLink to="/eleve-dashboard" @click="close">Mon espace</RouterLink>
           <RouterLink to="/galerie" @click="close">Galerie</RouterLink>
-          <RouterLink to="/projets" @click="close">Liste des sujets</RouterLink>
+          <RouterLink to="/sujets" @click="close">Liste des sujets</RouterLink>
           <RouterLink to="/proposer_projet" @click="close">Proposer un projet</RouterLink>
         </nav>
       </aside>

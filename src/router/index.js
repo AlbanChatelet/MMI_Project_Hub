@@ -6,6 +6,8 @@ import Login from '@/pages/login.vue'
 import ProposerProjet from '@/pages/proposer_projet.vue'
 import Register from '@/pages/register.vue'
 import Galerie from '@/pages/galerie.vue'
+import SujetsIndex from '@/pages/sujets/index.vue'
+import SujetsListe from '@/pages/sujets/liste.vue'
 
 // ✅ Nouveaux imports (à créer si pas encore fait)
 import Users from '@/pages/users.vue'
@@ -33,6 +35,16 @@ const routes = [
     path: '/galerie',
     name: 'galerie',
     component: Galerie
+  },
+  {
+    path: '/sujets',
+    name: 'sujets-index',
+    component: SujetsIndex
+  },
+  {
+    path: '/sujets/liste',
+    name: 'sujets-liste',
+    component: SujetsListe
   },
 
   // ✅ DASHBOARDS
