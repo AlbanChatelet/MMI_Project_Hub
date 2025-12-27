@@ -5,6 +5,7 @@ import ComponentTest from '../pages/component_test.vue'
 import Login from '@/pages/login.vue'
 import ProposerProjet from '@/pages/proposer_projet.vue'
 import Register from '@/pages/register.vue'
+import Galerie from '@/pages/galerie.vue'
 
 // ✅ Nouveaux imports (à créer si pas encore fait)
 import Users from '@/pages/users.vue'
@@ -27,6 +28,12 @@ const routes = [
 
   // ✅ ROUTE USERS
   { path: '/users', name: 'users', component: Users },
+
+  {
+    path: '/galerie',
+    name: 'galerie',
+    component: Galerie
+  },
 
   // ✅ DASHBOARDS
   { path: '/eleve-dashboard', name: 'eleve-dashboard', component: EleveDashboard },
