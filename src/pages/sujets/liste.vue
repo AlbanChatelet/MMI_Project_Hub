@@ -16,12 +16,18 @@ const annee = computed(() => String(route.query.annee || ""));
 const type = computed(() => String(route.query.type || ""));
 
 const anneeLabel = (a) => {
-  if (a === "1") return "1ère année";
-  if (a === "2") return "2ème année";
-  if (a === "3") return "3ème année";
-  return a;
+  const s = String(a || "");
+  if (s === "1") return "1ère année";
+  if (s === "2") return "2ème année";
+  if (s === "3") return "3ème année";
+  return s;
 };
-const typeLabel = (t) => (t === "collectif" ? "Collectif" : t === "solo" ? "Individuel" : t);
+const typeLabel = (t) => {
+  const s = String(t || "").toLowerCase();
+  if (s === "collectif") return "Collectif";
+  if (s === "solo") return "Individuel";
+  return s;
+};
 
 onMounted(async () => {
   try {
@@ -30,15 +36,14 @@ onMounted(async () => {
       return;
     }
 
-    // ⚠️ adapte le nom exact de ta collection ("Sujets" / "Sujet" / "sujets")
     sujets.value = await pb.collection("sujets").getFullList({
       sort: "-created",
       expand: "commanditaire",
       filter: `annee="${annee.value}" && type_sujet="${type.value}"`,
     });
   } catch (e) {
-    console.error(e);
-    error.value = e.message || "Erreur lors du chargement des sujets";
+    console.error("PB error", e, e?.data);
+    error.value = e?.data?.message || e?.message || "Erreur lors du chargement des sujets";
   } finally {
     loading.value = false;
   }
@@ -70,31 +75,42 @@ onMounted(async () => {
       <p v-else-if="error" class="text-red-300 mt-10">{{ error }}</p>
 
       <template v-else>
-        <div v-if="sujets.length" class="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          <article
+        <div
+          v-if="sujets.length"
+          class="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+        >
+          <!-- ✅ RouterLink DANS le v-for -->
+          <RouterLink
             v-for="s in sujets"
             :key="s.id"
-            class="relative rounded-3xl overflow-hidden bg-black/40 border border-white/10 shadow-xl"
+            :to="`/sujets/${s.id}`"
+            class="block"
           >
-            <!-- Placeholder “image” comme sur ta maquette -->
-            <div class="w-full h-48 bg-gradient-to-br from-white/10 to-black/40" />
+            <article
+              class="relative rounded-3xl overflow-hidden bg-black/40 border border-white/10 shadow-xl hover:border-white/20 transition"
+            >
+              <!-- Placeholder “image” -->
+              <div class="w-full h-48 bg-gradient-to-br from-white/10 to-black/40" />
 
-            <div class="absolute inset-x-0 bottom-0 p-6 bg-gradient-to-t from-black/90 via-black/50 to-transparent">
-              <h3 class="text-2xl font-extrabold text-[#CFFFBC] leading-tight">
-                {{ s.titre || "(Sans titre)" }}
-              </h3>
+              <div
+                class="absolute inset-x-0 bottom-0 p-6 bg-gradient-to-t from-black/90 via-black/50 to-transparent"
+              >
+                <h3 class="text-2xl font-extrabold text-[#CFFFBC] leading-tight">
+                  {{ s.titre || "(Sans titre)" }}
+                </h3>
 
-              <p class="mt-2 text-white/80 text-sm">
-                <span class="font-semibold">Commanditaire :</span>
-                {{
-                  s.expand?.commanditaire?.name
-                  || s.expand?.commanditaire?.username
-                  || s.expand?.commanditaire?.email
-                  || "Non renseigné"
-                }}
-              </p>
-            </div>
-          </article>
+                <p class="mt-2 text-white/80 text-sm">
+                  <span class="font-semibold">Commanditaire :</span>
+                  {{
+                    s.expand?.commanditaire?.name
+                    || s.expand?.commanditaire?.username
+                    || s.expand?.commanditaire?.email
+                    || "Non renseigné"
+                  }}
+                </p>
+              </div>
+            </article>
+          </RouterLink>
         </div>
 
         <p v-else class="text-white/60 mt-10">

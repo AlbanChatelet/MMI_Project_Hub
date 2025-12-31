@@ -68,41 +68,43 @@ const submit = async () => {
   error.value = "";
   success.value = false;
 
+  // 🔒 validations
   if (!titre.value.trim()) return (error.value = "Le titre est obligatoire.");
   if (!annee.value) return (error.value = "Veuillez sélectionner une année.");
-  if (!typeSujet.value) return (error.value = "Veuillez sélectionner solo / collectif.");
+  if (!typeSujet.value) return (error.value = "Veuillez sélectionner solo ou collectif.");
   if (!description.value.trim()) return (error.value = "La description est obligatoire.");
   if (!objectifs.value.trim()) return (error.value = "Les objectifs sont obligatoires.");
   if (!mail.value.trim()) return (error.value = "L'email est obligatoire.");
+
+  // 🔒 utilisateur connecté obligatoire
+  const user = pb.authStore?.record;
+  if (!user?.id) {
+    error.value = "Vous devez être connecté pour proposer un sujet.";
+    return;
+  }
 
   loading.value = true;
 
   try {
     const formData = new FormData();
 
+    // champs texte
     formData.append("titre", titre.value.trim());
     formData.append("annee", String(annee.value)); // select single
-    formData.append("type_sujet", typeSujet.value); // solo/collectif
+    formData.append("type_sujet", typeSujet.value); // solo / collectif
     formData.append("description", description.value.trim());
     formData.append("objectifs", objectifs.value.trim());
     formData.append("mail", mail.value.trim());
 
-    // ✅ select multiple: append multiple times (souvent le plus safe)
+    // compétences (select multiple)
     (competences.value || []).forEach((c) => {
       formData.append("competences", c);
     });
 
-    // ✅ relation commanditaire : seulement si user connecté + autorisé
-    // adapte le champ selon ton users: "role" ou "type_utilisateur"
-    const u = pb.authStore?.record;
-    const userRole = u?.role || u?.type_utilisateur; // adapte si besoin
+    // ✅ commanditaire = utilisateur connecté
+    formData.append("commanditaire", user.id);
 
-    const isAllowedCommanditaire = userRole === "admin" || userRole === "enseignant";
-    if (u?.id && isAllowedCommanditaire) {
-      formData.append("commanditaire", u.id);
-    }
-
-    // ✅ fichiers
+    // fichiers
     if (imageMarqueFile.value instanceof File) {
       formData.append("image_marque", imageMarqueFile.value);
     }
@@ -110,14 +112,15 @@ const submit = async () => {
       formData.append("sujet_pdf", sujetPdfFile.value);
     }
 
+    // création
     await pb.collection("sujets").create(formData);
 
     success.value = true;
     resetForm();
-    success.value = true;
   } catch (e) {
     console.error("PocketBase error FULL:", e);
     console.error("PocketBase error data:", e?.data);
+
     error.value =
       e?.data?.message ||
       JSON.stringify(e?.data, null, 2) ||

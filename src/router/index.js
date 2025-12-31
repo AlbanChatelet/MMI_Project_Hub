@@ -8,6 +8,7 @@ import Register from '@/pages/register.vue'
 import Galerie from '@/pages/galerie.vue'
 import SujetsIndex from '@/pages/sujets/index.vue'
 import SujetsListe from '@/pages/sujets/liste.vue'
+import SujetDetail from '@/pages/sujets/[id].vue'
 
 // ✅ Nouveaux imports (à créer si pas encore fait)
 import Users from '@/pages/users.vue'
@@ -45,6 +46,11 @@ const routes = [
     path: '/sujets/liste',
     name: 'sujets-liste',
     component: SujetsListe
+  },
+  {
+    path: '/sujets/:id',
+    name: 'sujet-detail',
+    component: SujetDetail
   },
 
   // ✅ DASHBOARDS
