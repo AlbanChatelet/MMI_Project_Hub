@@ -134,7 +134,7 @@ const submit = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#0E1116] text-white">
+  <div class="min-h-screen bg-[#151A24] text-white">
     <AppHeader />
 
     <div class="px-6 py-10 max-w-3xl">
