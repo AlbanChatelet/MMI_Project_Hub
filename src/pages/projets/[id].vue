@@ -82,7 +82,8 @@ onMounted(async () => {
 
 <template>
   <div class="min-h-screen bg-[#151A24] text-white">
-    <AppHeader />
+    <AppHeader variant="transparent" />
+
 
     <!-- LOADING / ERROR -->
     <div v-if="loading" class="max-w-6xl mx-auto px-6 py-10 text-white/70">
@@ -96,7 +97,7 @@ onMounted(async () => {
     <template v-else>
       <!-- HERO -->
       <section class="relative">
-        <div class="h-[420px] w-full overflow-hidden">
+        <div class="h-[500px] w-full overflow-hidden">
           <img
             v-if="heroImageUrl"
             :src="heroImageUrl"
@@ -114,7 +115,7 @@ onMounted(async () => {
 
         <!-- top content -->
         <div class="absolute inset-0">
-          <div class="max-w-6xl mx-auto px-6 pt-12">
+          <div class="max-w-6xl mx-auto px-6 pt-48">
             <button
               class="text-[#CFFFBC] hover:underline"
               @click="$router.back()"
@@ -122,7 +123,7 @@ onMounted(async () => {
               ← Retour
             </button>
 
-            <div class="mt-16 max-w-2xl">
+            <div class="mt-12 max-w-2xl">
               <h1 class="text-4xl md:text-5xl font-extrabold text-[#CFFFBC] leading-tight">
                 {{ projet?.titre || "(Sans titre)" }}
               </h1>
