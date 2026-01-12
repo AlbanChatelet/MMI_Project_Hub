@@ -1,17 +1,23 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <script setup>
 import { ref, onMounted, computed } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 import AppHeader from "@/components/AppHeader.vue";
 import { pb } from "../../pb";
 
 const route = useRoute();
-const router = useRouter();
 
+// data principaux
 const loading = ref(true);
 const error = ref("");
 const projet = ref(null);
+const sujet = ref(null);
 
+const groupe = ref(null);
+const membres = ref([]);
+const etapes = ref([]);
+
+// id du projet depuis l’URL
 const id = computed(() => String(route.params.id || ""));
 
 // --- helpers labels ---
@@ -31,17 +37,58 @@ const anneeLabel = (a) => {
   return s ? `${s}ème année` : "";
 };
 
+// --- user helpers (affichage groupe) ---
+const userDisplayName = (u) => {
+  const prenom = String(u?.prenom || "").trim();
+  const nom = String(u?.nom || "").trim();
+  const full = `${prenom} ${nom}`.trim();
+  return full || u?.name || u?.username || u?.email || "Utilisateur";
+};
+
+const initials = (name) => {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  const a = parts[0]?.[0] || "";
+  const b = parts[1]?.[0] || "";
+  return (a + b).toUpperCase();
+};
+
+// adapte si ton champ avatar s’appelle autrement dans users (avatar/photo/image)
+const userAvatarUrl = (u) => {
+  if (!u) return null;
+  const file = u.avatar || u.photo || u.image;
+  if (!file) return null;
+  try {
+    return pb.files.getUrl(u, file);
+  } catch {
+    return null;
+  }
+};
+
+// Sous-texte : "3ème année – Design" (si tu as annee/parcours dans users)
+const memberSubtitle = (u) => {
+  const annee = anneeLabel(u?.annee);
+  const parcours = parcoursLabel(u?.parcours || u?.specialisation);
+  if (annee && parcours) return `${annee} – ${parcours}`;
+  return annee || parcours || "";
+};
+
 // --- files URLs ---
 const heroImageUrl = computed(() => {
-  if (!projet.value) return null;
-  const file = projet.value.photo || projet.value.apercu;
-  if (!file) return null;
-  return pb.files.getUrl(projet.value, file);
+  // priorité : photo projet
+  if (projet.value?.photo) return pb.files.getUrl(projet.value, projet.value.photo);
+
+  // fallback : image_marque du sujet (si tu veux)
+  if (sujet.value?.image_marque) return pb.files.getUrl(sujet.value, sujet.value.image_marque);
+
+  // dernier fallback : apercu si tu as encore ce champ
+  if (projet.value?.apercu) return pb.files.getUrl(projet.value, projet.value.apercu);
+
+  return null;
 });
 
 const sujetPdfUrl = computed(() => {
-  if (!projet.value?.sujet_pdf) return null;
-  return pb.files.getUrl(projet.value, projet.value.sujet_pdf);
+  if (!sujet.value?.sujet_pdf) return null;
+  return pb.files.getUrl(sujet.value, sujet.value.sujet_pdf);
 });
 
 // --- promo chips (année + parcours) ---
@@ -49,41 +96,72 @@ const sujetPdfUrl = computed(() => {
 const promoBadges = computed(() => {
   const promos = projet.value?.expand?.promo;
   if (!Array.isArray(promos)) return [];
-  // exemple: 2023-2026 + mm*i + parcours
-  return promos.map((pr) => {
-    return {
-      id: pr.id,
-      promo: pr.promo, // 2023-2026
-      annee: pr.annee, // 1/2/3
-      parcours: pr.parcours, // dev/crea/com
-      presentable: pr.presentable, // si tu l’utilises
-    };
-  });
+  return promos.map((pr) => ({
+    id: pr.id,
+    promo: pr.promo,
+    annee: pr.annee,
+    parcours: pr.parcours,
+    presentable: pr.presentable,
+  }));
 });
 
 onMounted(async () => {
-  try {
-    if (!id.value) {
-      router.replace("/");
-      return;
-    }
+  const projetId = id.value;
+  if (!projetId) {
+    error.value = "ID du projet manquant dans l’URL.";
+    loading.value = false;
+    return;
+  }
 
-    projet.value = await pb.collection("Projet").getOne(id.value, {
-      expand: "commanditaire,promo",
+  try {
+    // 1) Projet + expand promo + sujet
+    projet.value = await pb.collection("Projet").getOne(projetId, {
+      expand: "promo,sujet",
     });
-  } catch (e) {
-    console.error("Projet detail error:", e, e?.data);
-    error.value = e?.data?.message || e?.message || "Projet introuvable.";
+
+    // 2) Sujet via expand (relation Projet.sujet -> sujets)
+    sujet.value = projet.value?.expand?.sujet || null;
+
+    // 3) Étapes liées au projet
+    etapes.value = await pb.collection("Etape").getFullList({
+      filter: `id_projet = "${projetId}"`,
+      sort: "date_debut",
+    });
+
+    // 4) Groupe lié au projet
+    const groupeId = projet.value.groupe;
+
+    if (groupeId) {
+      groupe.value = await pb.collection("Groupe").getOne(groupeId);
+
+      // 5) Membres du groupe
+      if (Array.isArray(groupe.value.membres) && groupe.value.membres.length > 0) {
+        const orFilter = groupe.value.membres.map((uid) => `id="${uid}"`).join(" || ");
+        membres.value = await pb.collection("users").getFullList({
+          filter: orFilter,
+          sort: "created",
+        });
+      } else {
+        membres.value = [];
+      }
+    } else {
+      groupe.value = null;
+      membres.value = [];
+    }
+  } catch (err) {
+    console.error(err);
+    error.value = err?.message || "Erreur lors du chargement du projet";
   } finally {
     loading.value = false;
   }
 });
 </script>
 
+
+
 <template>
   <div class="min-h-screen bg-[#151A24] text-white">
     <AppHeader variant="transparent" />
-
 
     <!-- LOADING / ERROR -->
     <div v-if="loading" class="max-w-6xl mx-auto px-6 py-10 text-white/70">
@@ -124,7 +202,9 @@ onMounted(async () => {
             </button>
 
             <div class="mt-12 max-w-2xl">
-              <h1 class="text-4xl md:text-5xl font-extrabold text-[#CFFFBC] leading-tight">
+              <h1
+                class="text-4xl md:text-5xl font-extrabold text-[#CFFFBC] leading-tight"
+              >
                 {{ projet?.titre || "(Sans titre)" }}
               </h1>
 
@@ -144,13 +224,82 @@ onMounted(async () => {
 
       <!-- CONTENT PANEL -->
       <section class="max-w-6xl mx-auto px-6 mt-12 pb-16">
-        <div class="rounded-3xl bg-[#1B2130] border border-white/10 shadow-xl p-8">
-          <!-- DESCRIPTION -->
+        <div
+          class="rounded-3xl bg-[#1B2130] border border-white/10 shadow-xl p-8"
+        >
+          <!-- DESCRIPTION (depuis la collection sujets) -->
           <div class="text-white/85 leading-relaxed whitespace-pre-line">
-            {{ projet?.description || "Aucune description." }}
+            {{ sujet?.description || "Aucune description." }}
           </div>
 
-          <!-- PROMOS (année/parcours) : optionnel, mais utile -->
+          <!-- GROUPE -->
+          <section class="mt-10">
+            <div class="flex items-end justify-between gap-4 flex-wrap">
+              <h2 class="text-xl font-extrabold text-white">
+                Membres du groupe
+              </h2>
+
+              <p v-if="groupe" class="text-white/50 text-sm">
+                {{ membres.length }} membre{{ membres.length > 1 ? "s" : "" }}
+              </p>
+            </div>
+
+            <!-- Aucun groupe -->
+            <div
+              v-if="!groupe"
+              class="mt-4 rounded-2xl border border-white/10 bg-black/20 p-5 text-white/70"
+            >
+              Aucun groupe n’est encore attribué à ce projet.
+            </div>
+
+            <!-- Groupe OK -->
+            <div v-else class="mt-4">
+              <div
+                v-if="membres.length"
+                class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+              >
+                <div
+                  v-for="m in membres"
+                  :key="m.id"
+                  class="rounded-xl bg-white/5 border border-white/10 p-5 flex flex-col items-center text-center"
+                >
+                  <!-- Avatar -->
+                  <div
+                    class="w-16 h-16 rounded-full overflow-hidden border border-white/10 bg-white/5 grid place-items-center"
+                  >
+                    <img
+                      v-if="userAvatarUrl(m)"
+                      :src="userAvatarUrl(m)"
+                      alt=""
+                      class="w-full h-full object-cover"
+                    />
+                    <span v-else class="text-sm font-extrabold text-white/70">
+                      {{ initials(userDisplayName(m)) }}
+                    </span>
+                  </div>
+
+                  <!-- Nom -->
+                  <p class="mt-3 font-extrabold text-white leading-tight">
+                    {{ userDisplayName(m) }}
+                  </p>
+
+                  <!-- Sous-texte -->
+                  <p v-if="memberSubtitle(m)" class="mt-1 text-sm text-white/60">
+                    {{ memberSubtitle(m) }}
+                  </p>
+                </div>
+              </div>
+
+              <div
+                v-else
+                class="rounded-2xl border border-white/10 bg-black/20 p-5 text-white/70"
+              >
+                Le groupe existe, mais aucun membre n’est associé.
+              </div>
+            </div>
+          </section>
+
+          <!-- PROMOS (année/parcours) -->
           <div v-if="promoBadges.length" class="mt-8">
             <h2 class="font-bold text-white mb-3">Parcours concernés</h2>
             <div class="flex flex-wrap gap-3">
@@ -169,15 +318,18 @@ onMounted(async () => {
             </div>
           </div>
 
-          <!-- GRID: compétences + documents -->
+          <!-- GRID: compétences + ressources -->
           <div class="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-10">
-            <!-- Compétences -->
+            <!-- Compétences (depuis la collection sujets) -->
             <div>
               <h2 class="font-bold text-white mb-4">Compétences mobilisées</h2>
 
-              <div v-if="(projet?.competences || []).length" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div
+                v-if="(sujet?.competences || []).length"
+                class="grid grid-cols-1 sm:grid-cols-2 gap-3"
+              >
                 <div
-                  v-for="c in projet.competences"
+                  v-for="c in sujet.competences"
                   :key="c"
                   class="rounded-lg bg-white/5 border border-white/10 px-4 py-3 text-sm text-white/85"
                 >
@@ -190,56 +342,51 @@ onMounted(async () => {
               </p>
             </div>
 
-            <!-- Documents -->
+            <!-- Ressource (carte style maquette) -->
             <div>
-              <h2 class="font-bold text-white mb-4">Documents utiles</h2>
+              <h2 class="font-bold text-white mb-4">Ressource</h2>
 
-              <div class="flex gap-4 flex-wrap">
-                <!-- PDF sujet -->
-                <a
-                  v-if="sujetPdfUrl"
-                  :href="sujetPdfUrl"
-                  target="_blank"
-                  rel="noreferrer"
-                  class="w-40 h-28 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition flex flex-col items-center justify-center gap-2"
+              <a
+                v-if="sujetPdfUrl"
+                :href="sujetPdfUrl"
+                target="_blank"
+                rel="noreferrer"
+                class="w-44 h-32 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition flex flex-col items-center justify-center gap-3"
+              >
+                <div
+                  class="w-10 h-10 rounded-lg bg-[#CFFFBC]/10 flex items-center justify-center"
                 >
-                  <div class="text-[#CFFFBC] text-3xl">📄</div>
-                  <span class="text-[#CFFFBC] font-semibold">Sujet</span>
-                </a>
+                  <span class="text-[#CFFFBC] text-2xl leading-none">📄</span>
+                </div>
+                <span class="text-[#CFFFBC] font-semibold">Sujet</span>
+              </a>
 
-                <!-- Exemple carte “lien” (si tu ajoutes un champ plus tard) -->
-                <!--
-                <a
-                  v-if="projet?.lien_utile"
-                  :href="projet.lien_utile"
-                  target="_blank"
-                  rel="noreferrer"
-                  class="w-40 h-28 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition flex flex-col items-center justify-center gap-2"
-                >
-                  <div class="text-[#CFFFBC] text-3xl">🌐</div>
-                  <span class="text-[#CFFFBC] font-semibold">Lien</span>
-                </a>
-                -->
-
-                <p v-if="!sujetPdfUrl" class="text-white/60 text-sm">
-                  Aucun document fourni.
-                </p>
-              </div>
+              <p v-else class="text-white/60 text-sm">
+                Aucun PDF fourni.
+              </p>
             </div>
           </div>
 
-          <!-- CTA -->
+          <!-- (optionnel) Étapes - si tu veux les afficher plus bas -->
+          <!--
           <div class="mt-12">
-            <button
-              class="w-full rounded-full bg-[#CFFFBC] text-black font-semibold py-4 hover:bg-[#B8E6A8] transition"
-              type="button"
-              @click="alert('Ici tu pourras ouvrir un formulaire ou envoyer une demande 👍')"
-            >
-              Demander ce projet
-            </button>
+            <h2 class="text-xl font-extrabold text-white mb-4">Étapes</h2>
+            <div v-if="etapes.length" class="space-y-3">
+              <div
+                v-for="e in etapes"
+                :key="e.id"
+                class="rounded-xl bg-white/5 border border-white/10 p-5"
+              >
+                <p class="font-bold text-white">{{ e.titre }}</p>
+                <p class="text-white/70 text-sm mt-1 whitespace-pre-line">{{ e.description }}</p>
+              </div>
+            </div>
+            <p v-else class="text-white/60 text-sm">Aucune étape pour le moment.</p>
           </div>
+          -->
         </div>
       </section>
     </template>
   </div>
 </template>
+
