@@ -86,8 +86,8 @@ onMounted(async () => {
         >
           <!-- Image -->
           <img
-            v-if="projet.apercu"
-            :src="pb.files.getUrl(projet, projet.apercu)"
+            v-if="projet.photo"
+            :src="pb.files.getUrl(projet, projet.photo)"
             class="absolute inset-0 w-full h-full object-cover transform group-hover:scale-110 transition duration-700"
             alt="Aperçu du projet"
           />

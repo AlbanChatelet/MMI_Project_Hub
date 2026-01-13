@@ -20,7 +20,28 @@ const etapes = ref([]);
 // id du projet depuis l’URL
 const id = computed(() => String(route.params.id || ""));
 
-// --- helpers labels ---
+/* ===========================
+   ✅ Auth / droits
+   - Tout le monde peut consulter
+   - Edition uniquement si user connecté ET membre du groupe du projet
+   =========================== */
+const authUser = computed(() => pb.authStore?.model || null);
+const authUserId = computed(() => authUser.value?.id || null);
+
+// true si l'utilisateur connecté fait partie du groupe (groupe.membres = ids users)
+const isMemberOfGroup = computed(() => {
+  const uid = authUserId.value;
+  if (!uid) return false;
+  const ids = groupe.value?.membres;
+  return Array.isArray(ids) ? ids.includes(uid) : false;
+});
+
+// droits d'édition
+const canEdit = computed(() => isMemberOfGroup.value);
+
+/* ===========================
+   ✅ Helpers
+   =========================== */
 const parcoursLabel = (p) => {
   const s = String(p || "").toLowerCase();
   if (s === "dev") return "Développement";
@@ -37,7 +58,6 @@ const anneeLabel = (a) => {
   return s ? `${s}ème année` : "";
 };
 
-// --- user helpers (affichage groupe) ---
 const userDisplayName = (u) => {
   const prenom = String(u?.prenom || "").trim();
   const nom = String(u?.nom || "").trim();
@@ -52,7 +72,6 @@ const initials = (name) => {
   return (a + b).toUpperCase();
 };
 
-// adapte si ton champ avatar s’appelle autrement dans users (avatar/photo/image)
 const userAvatarUrl = (u) => {
   if (!u) return null;
   const file = u.avatar || u.photo || u.image;
@@ -64,7 +83,6 @@ const userAvatarUrl = (u) => {
   }
 };
 
-// Sous-texte : "3ème année – Design" (si tu as annee/parcours dans users)
 const memberSubtitle = (u) => {
   const annee = anneeLabel(u?.annee);
   const parcours = parcoursLabel(u?.parcours || u?.specialisation);
@@ -72,17 +90,10 @@ const memberSubtitle = (u) => {
   return annee || parcours || "";
 };
 
-// --- files URLs ---
 const heroImageUrl = computed(() => {
-  // priorité : photo projet
   if (projet.value?.photo) return pb.files.getUrl(projet.value, projet.value.photo);
-
-  // fallback : image_marque du sujet (si tu veux)
   if (sujet.value?.image_marque) return pb.files.getUrl(sujet.value, sujet.value.image_marque);
-
-  // dernier fallback : apercu si tu as encore ce champ
   if (projet.value?.apercu) return pb.files.getUrl(projet.value, projet.value.apercu);
-
   return null;
 });
 
@@ -91,7 +102,6 @@ const sujetPdfUrl = computed(() => {
   return pb.files.getUrl(sujet.value, sujet.value.sujet_pdf);
 });
 
-// --- promo chips (année + parcours) ---
 const promoBadges = computed(() => {
   const promos = projet.value?.expand?.promo;
   if (!Array.isArray(promos)) return [];
@@ -104,8 +114,35 @@ const promoBadges = computed(() => {
   }));
 });
 
+const formatDateFr = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "long" });
+};
+
+// Affiche les membres assignés même si expand ne marche pas
+const assignedMembers = (e) => {
+  const expanded = e?.expand?.membres;
+  if (Array.isArray(expanded) && expanded.length) return expanded;
+
+  const ids = e?.membres;
+  if (!Array.isArray(ids) || !ids.length) return [];
+
+  const set = new Set(ids);
+  return (membres.value || []).filter((u) => set.has(u.id));
+};
+
+// Timeout pour éviter requêtes qui pendent
+const withTimeout = (promise, ms = 15000, label = "Requête") => {
+  let t;
+  const timeout = new Promise((_, reject) => {
+    t = setTimeout(() => reject(new Error(`${label} : délai dépassé (${ms / 1000}s)`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(t));
+};
+
 /* ===========================
-   ✅ Couverture : upload / update
+   ✅ Couverture : upload / update (édition restreinte)
    =========================== */
 const coverUploading = ref(false);
 const coverError = ref("");
@@ -114,6 +151,13 @@ const coverSuccess = ref("");
 const onCoverFileChange = async (e) => {
   coverError.value = "";
   coverSuccess.value = "";
+
+  if (!canEdit.value) {
+    coverError.value = "Vous n’avez pas les droits pour modifier ce projet.";
+    // reset input
+    if (e?.target) e.target.value = "";
+    return;
+  }
 
   const file = e?.target?.files?.[0];
   if (!file || !projet.value?.id) return;
@@ -137,9 +181,13 @@ const onCoverFileChange = async (e) => {
     const formData = new FormData();
     formData.append("photo", file);
 
-    const updated = await pb.collection("Projet").update(projet.value.id, formData);
-    projet.value = { ...projet.value, ...updated };
+    const updated = await withTimeout(
+      pb.collection("Projet").update(projet.value.id, formData),
+      15000,
+      "Mise à jour couverture"
+    );
 
+    projet.value = { ...projet.value, ...updated };
     coverSuccess.value = "Image de couverture mise à jour ✅";
   } catch (err) {
     console.error(err);
@@ -151,13 +199,23 @@ const onCoverFileChange = async (e) => {
 };
 
 const removeCover = async () => {
-  if (!projet.value?.id) return;
   coverError.value = "";
   coverSuccess.value = "";
+
+  if (!canEdit.value) {
+    coverError.value = "Vous n’avez pas les droits pour modifier ce projet.";
+    return;
+  }
+
+  if (!projet.value?.id) return;
   coverUploading.value = true;
 
   try {
-    const updated = await pb.collection("Projet").update(projet.value.id, { photo: null });
+    const updated = await withTimeout(
+      pb.collection("Projet").update(projet.value.id, { photo: null }),
+      15000,
+      "Suppression couverture"
+    );
     projet.value = { ...projet.value, ...updated };
     coverSuccess.value = "Image de couverture supprimée ✅";
   } catch (err) {
@@ -169,7 +227,7 @@ const removeCover = async () => {
 };
 
 /* ===========================
-   ✅ Étapes : création + assignation membres
+   ✅ Étapes : fetch + création (édition restreinte)
    =========================== */
 const showAddEtape = ref(false);
 const creatingEtape = ref(false);
@@ -181,50 +239,77 @@ const etapeForm = ref({
   description: "",
   date_debut: "",
   date_fin: "",
-  statut: "todo", // adapte si besoin
-  progress: 0, // nécessite un champ number "progress" dans Etape (optionnel)
-  membres: [], // nécessite un champ relation multiple "membres" dans Etape
+  statut: "todo", // todo | en_cours | done
+  progress: 0, // optionnel (champ number "progress")
+  membres: [], // optionnel (champ relation multiple "membres")
 });
-
-const formatDateFr = (iso) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "long" });
-};
 
 const reloadEtapes = async () => {
   const projetId = id.value;
-  etapes.value = await pb.collection("Etape").getFullList({
-    filter: `id_projet = "${projetId}"`,
-    sort: "date_debut",
-    expand: "membres",
-  });
+  if (!projetId) return;
+
+  etapes.value = await withTimeout(
+    pb.collection("Etape").getFullList({
+      filter: `id_projet = "${projetId}"`,
+      sort: "date_debut",
+      expand: "membres",
+    }),
+    15000,
+    "Chargement étapes"
+  );
+};
+
+const openAddEtape = () => {
+  etapeError.value = "";
+  etapeSuccess.value = "";
+
+  if (!canEdit.value) {
+    etapeError.value = "Vous n’avez pas les droits pour ajouter des étapes sur ce projet.";
+    return;
+  }
+  showAddEtape.value = true;
 };
 
 const createEtape = async () => {
   etapeError.value = "";
   etapeSuccess.value = "";
 
-  if (!projet.value?.id) return;
+  if (!canEdit.value) {
+    etapeError.value = "Vous n’avez pas les droits pour ajouter des étapes sur ce projet.";
+    return;
+  }
 
-  if (!etapeForm.value.titre.trim()) {
+  if (!projet.value?.id) {
+    etapeError.value = "Projet introuvable.";
+    return;
+  }
+
+  if (!String(etapeForm.value.titre || "").trim()) {
     etapeError.value = "Le titre est obligatoire.";
     return;
   }
 
+  const safeProgress = Number.isFinite(Number(etapeForm.value.progress))
+    ? Math.max(0, Math.min(100, Number(etapeForm.value.progress)))
+    : 0;
+
   creatingEtape.value = true;
 
   try {
-    await pb.collection("Etape").create({
-      titre: etapeForm.value.titre.trim(),
-      description: etapeForm.value.description?.trim() || "",
-      date_debut: etapeForm.value.date_debut || null,
-      date_fin: etapeForm.value.date_fin || null,
-      statut: etapeForm.value.statut || "todo",
-      progress: Number(etapeForm.value.progress || 0),
-      id_projet: projet.value.id,
-      membres: etapeForm.value.membres || [],
-    });
+    await withTimeout(
+      pb.collection("Etape").create({
+        titre: String(etapeForm.value.titre).trim(),
+        description: String(etapeForm.value.description || "").trim(),
+        date_debut: etapeForm.value.date_debut || null,
+        date_fin: etapeForm.value.date_fin || null,
+        statut: etapeForm.value.statut || "todo",
+        progress: safeProgress,
+        id_projet: projet.value.id,
+        membres: Array.isArray(etapeForm.value.membres) ? etapeForm.value.membres : [],
+      }),
+      15000,
+      "Création étape"
+    );
 
     await reloadEtapes();
 
@@ -248,6 +333,9 @@ const createEtape = async () => {
   }
 };
 
+/* ===========================
+   ✅ Mounted : charger projet + groupe/membres + étapes
+   =========================== */
 onMounted(async () => {
   const projetId = id.value;
   if (!projetId) {
@@ -257,30 +345,36 @@ onMounted(async () => {
   }
 
   try {
-    // 1) Projet + expand promo + sujet
-    projet.value = await pb.collection("Projet").getOne(projetId, {
-      expand: "promo,sujet",
-    });
+    // Projet consultable par tous
+    projet.value = await withTimeout(
+      pb.collection("Projet").getOne(projetId, { expand: "promo,sujet" }),
+      15000,
+      "Chargement projet"
+    );
 
-    // 2) Sujet via expand (relation Projet.sujet -> sujets)
     sujet.value = projet.value?.expand?.sujet || null;
 
-    // 3) Étapes liées au projet (avec membres assignés)
-    await reloadEtapes();
-
-    // 4) Groupe lié au projet
-    const groupeId = projet.value.groupe;
+    // Groupe (si présent)
+    const groupeId = projet.value?.groupe;
 
     if (groupeId) {
-      groupe.value = await pb.collection("Groupe").getOne(groupeId);
+      groupe.value = await withTimeout(
+        pb.collection("Groupe").getOne(groupeId),
+        15000,
+        "Chargement groupe"
+      );
 
-      // 5) Membres du groupe
-      if (Array.isArray(groupe.value.membres) && groupe.value.membres.length > 0) {
+      // Membres du groupe (pour affichage + fallback assignation)
+      if (Array.isArray(groupe.value?.membres) && groupe.value.membres.length > 0) {
         const orFilter = groupe.value.membres.map((uid) => `id="${uid}"`).join(" || ");
-        membres.value = await pb.collection("users").getFullList({
-          filter: orFilter,
-          sort: "created",
-        });
+        membres.value = await withTimeout(
+          pb.collection("users").getFullList({
+            filter: orFilter,
+            sort: "created",
+          }),
+          15000,
+          "Chargement membres"
+        );
       } else {
         membres.value = [];
       }
@@ -288,6 +382,9 @@ onMounted(async () => {
       groupe.value = null;
       membres.value = [];
     }
+
+    // Étapes consultables par tous
+    await reloadEtapes();
   } catch (err) {
     console.error(err);
     error.value = err?.message || "Erreur lors du chargement du projet";
@@ -320,24 +417,35 @@ onMounted(async () => {
             alt="Visuel du projet"
             class="w-full h-full object-cover"
           />
-          <div
-            v-else
-            class="w-full h-full bg-gradient-to-br from-white/10 to-black/50"
-          />
+          <div v-else class="w-full h-full bg-gradient-to-br from-white/10 to-black/50" />
         </div>
 
-        <!-- dark overlay -->
         <div class="absolute inset-0 bg-black/55" />
 
-        <!-- top content -->
         <div class="absolute inset-0">
           <div class="max-w-6xl mx-auto px-6 pt-48">
             <button class="text-[#CFFFBC] hover:underline" @click="$router.back()">
               ← Retour
             </button>
 
-            <!-- Actions couverture -->
-            <div class="mt-6 flex items-center gap-3 flex-wrap">
+            <!-- Badge droits -->
+            <div class="mt-4">
+              <span
+                v-if="canEdit"
+                class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#CFFFBC]/15 border border-[#CFFFBC]/25 text-sm text-[#CFFFBC] font-semibold"
+              >
+                ✔️ Vous pouvez modifier ce projet
+              </span>
+              <span
+                v-else
+                class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-sm text-white/70 font-semibold"
+              >
+                👀 Lecture seule
+              </span>
+            </div>
+
+            <!-- Actions couverture (uniquement si canEdit) -->
+            <div v-if="canEdit" class="mt-6 flex items-center gap-3 flex-wrap">
               <label
                 class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 border border-white/15 hover:bg-white/15 transition cursor-pointer"
               >
@@ -362,13 +470,12 @@ onMounted(async () => {
                 Retirer
               </button>
 
-              <p v-if="coverError" class="text-sm text-red-300">
-                {{ coverError }}
-              </p>
-              <p v-else-if="coverSuccess" class="text-sm text-[#CFFFBC]">
-                {{ coverSuccess }}
-              </p>
+              <p v-if="coverError" class="text-sm text-red-300">{{ coverError }}</p>
+              <p v-else-if="coverSuccess" class="text-sm text-[#CFFFBC]">{{ coverSuccess }}</p>
             </div>
+
+            <!-- si pas canEdit et erreur cover (au cas où) -->
+            <p v-else-if="coverError" class="mt-6 text-sm text-red-300">{{ coverError }}</p>
 
             <div class="mt-12 max-w-2xl">
               <h1 class="text-4xl md:text-5xl font-extrabold text-[#CFFFBC] leading-tight">
@@ -392,7 +499,7 @@ onMounted(async () => {
       <!-- CONTENT PANEL -->
       <section class="max-w-6xl mx-auto px-6 mt-12 pb-16">
         <div class="rounded-3xl bg-[#1B2130] border border-white/10 shadow-xl p-8">
-          <!-- DESCRIPTION (depuis la collection sujets) -->
+          <!-- DESCRIPTION -->
           <div class="text-white/85 leading-relaxed whitespace-pre-line">
             {{ sujet?.description || "Aucune description." }}
           </div>
@@ -400,16 +507,13 @@ onMounted(async () => {
           <!-- GROUPE -->
           <section class="mt-10">
             <div class="flex items-end justify-between gap-4 flex-wrap">
-              <h2 class="text-xl font-extrabold text-white">
-                Membres du groupe
-              </h2>
+              <h2 class="text-xl font-extrabold text-white">Membres du groupe</h2>
 
               <p v-if="groupe" class="text-white/50 text-sm">
                 {{ membres.length }} membre{{ membres.length > 1 ? "s" : "" }}
               </p>
             </div>
 
-            <!-- Aucun groupe -->
             <div
               v-if="!groupe"
               class="mt-4 rounded-2xl border border-white/10 bg-black/20 p-5 text-white/70"
@@ -417,7 +521,6 @@ onMounted(async () => {
               Aucun groupe n’est encore attribué à ce projet.
             </div>
 
-            <!-- Groupe OK -->
             <div v-else class="mt-4">
               <div
                 v-if="membres.length"
@@ -428,7 +531,6 @@ onMounted(async () => {
                   :key="m.id"
                   class="rounded-xl bg-white/5 border border-white/10 p-5 flex flex-col items-center text-center"
                 >
-                  <!-- Avatar -->
                   <div
                     class="w-16 h-16 rounded-full overflow-hidden border border-white/10 bg-white/5 grid place-items-center"
                   >
@@ -443,12 +545,10 @@ onMounted(async () => {
                     </span>
                   </div>
 
-                  <!-- Nom -->
                   <p class="mt-3 font-extrabold text-white leading-tight">
                     {{ userDisplayName(m) }}
                   </p>
 
-                  <!-- Sous-texte -->
                   <p v-if="memberSubtitle(m)" class="mt-1 text-sm text-white/60">
                     {{ memberSubtitle(m) }}
                   </p>
@@ -464,7 +564,7 @@ onMounted(async () => {
             </div>
           </section>
 
-          <!-- PROMOS (année/parcours) -->
+          <!-- PROMOS -->
           <div v-if="promoBadges.length" class="mt-8">
             <h2 class="font-bold text-white mb-3">Parcours concernés</h2>
             <div class="flex flex-wrap gap-3">
@@ -485,7 +585,6 @@ onMounted(async () => {
 
           <!-- GRID: compétences + ressources -->
           <div class="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-10">
-            <!-- Compétences (depuis la collection sujets) -->
             <div>
               <h2 class="font-bold text-white mb-4">Compétences mobilisées</h2>
 
@@ -502,12 +601,9 @@ onMounted(async () => {
                 </div>
               </div>
 
-              <p v-else class="text-white/60 text-sm">
-                Aucune compétence renseignée.
-              </p>
+              <p v-else class="text-white/60 text-sm">Aucune compétence renseignée.</p>
             </div>
 
-            <!-- Ressource (carte style maquette) -->
             <div>
               <h2 class="font-bold text-white mb-4">Ressource</h2>
 
@@ -526,9 +622,7 @@ onMounted(async () => {
                 <span class="text-[#CFFFBC] font-semibold">Sujet</span>
               </a>
 
-              <p v-else class="text-white/60 text-sm">
-                Aucun PDF fourni.
-              </p>
+              <p v-else class="text-white/60 text-sm">Aucun PDF fourni.</p>
             </div>
           </div>
 
@@ -537,13 +631,26 @@ onMounted(async () => {
             <div class="flex items-center justify-between gap-4 flex-wrap">
               <h2 class="text-xl font-extrabold text-white">To do list</h2>
 
+              <!-- Bouton uniquement si canEdit -->
               <button
+                v-if="canEdit"
                 class="px-4 py-2 rounded-full bg-[#CFFFBC]/15 border border-[#CFFFBC]/25 hover:bg-[#CFFFBC]/20 transition text-sm font-semibold text-[#CFFFBC]"
-                @click="showAddEtape = true"
+                @click="openAddEtape"
               >
                 + Ajouter une étape
               </button>
+
+              <span
+                v-else
+                class="text-sm text-white/55"
+              >
+                Vous pouvez consulter les étapes (édition réservée aux membres du groupe)
+              </span>
             </div>
+
+            <p v-if="etapeError && !showAddEtape" class="mt-3 text-sm text-red-300">
+              {{ etapeError }}
+            </p>
 
             <div v-if="etapes.length" class="mt-5 flex gap-4 overflow-x-auto pb-3">
               <article
@@ -563,7 +670,7 @@ onMounted(async () => {
                   </div>
 
                   <div class="mt-3 flex items-center gap-2 flex-wrap">
-                    <template v-for="u in (e.expand?.membres || [])" :key="u.id">
+                    <template v-for="u in assignedMembers(e)" :key="u.id">
                       <div
                         class="w-7 h-7 rounded-full overflow-hidden border border-white/10 bg-white/5 grid place-items-center"
                         title="Assigné"
@@ -580,7 +687,7 @@ onMounted(async () => {
                       </div>
                     </template>
 
-                    <span v-if="!(e.expand?.membres || []).length" class="text-white/50 text-sm">
+                    <span v-if="!assignedMembers(e).length" class="text-white/50 text-sm">
                       Aucun membre assigné
                     </span>
                   </div>
@@ -614,7 +721,7 @@ onMounted(async () => {
               Aucune étape pour le moment.
             </div>
 
-            <!-- MODAL création étape -->
+            <!-- MODAL création étape (uniquement utile si canEdit) -->
             <div
               v-if="showAddEtape"
               class="fixed inset-0 z-50 bg-black/60 grid place-items-center px-6"
@@ -739,6 +846,7 @@ onMounted(async () => {
                   <div class="pt-2 flex items-center justify-end gap-3">
                     <button
                       class="px-4 py-2 rounded-full bg-white/10 border border-white/15 hover:bg-white/15 transition text-sm font-semibold text-white"
+                      :disabled="creatingEtape"
                       @click="showAddEtape = false"
                     >
                       Annuler
@@ -756,7 +864,6 @@ onMounted(async () => {
               </div>
             </div>
           </section>
-
         </div>
       </section>
     </template>
