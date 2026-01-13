@@ -17,29 +17,72 @@ const isEditModalOpen = ref(false);
 const isUpdating = ref(false);
 const editForm = ref({
   name: "",
-  username: ""
+  username: "",
+  avatar: null,        // ✅ nouveau
+  avatarPreview: null, // ✅ nouveau
 });
 
 const openEditModal = () => {
   editForm.value = {
     name: user.value?.name || "",
-    username: user.value?.username || ""
+    username: user.value?.username || "",
+    avatar: null,
+    avatarPreview: null,
   };
   isEditModalOpen.value = true;
+};
+
+// ✅ Gestion input file avatar
+const onAvatarChange = (e) => {
+  const file = e?.target?.files?.[0] || null;
+  editForm.value.avatar = file;
+
+  // preview (optionnel mais pratique)
+  if (editForm.value.avatarPreview) {
+    URL.revokeObjectURL(editForm.value.avatarPreview);
+    editForm.value.avatarPreview = null;
+  }
+  if (file) {
+    editForm.value.avatarPreview = URL.createObjectURL(file);
+  }
+};
+
+// (optionnel) nettoyer l’URL de preview quand on ferme
+const closeEditModal = () => {
+  if (editForm.value.avatarPreview) {
+    URL.revokeObjectURL(editForm.value.avatarPreview);
+  }
+  isEditModalOpen.value = false;
 };
 
 const handleUpdateProfile = async () => {
   isUpdating.value = true;
   try {
-    const record = await pb.collection("users").update(user.value.id, {
-      name: editForm.value.name,
-      username: editForm.value.username,
-    });
-    user.value = record; // Mise à jour locale pour le réactf
-    isEditModalOpen.value = false;
+    // ✅ Si avatar sélectionné => FormData obligatoire
+    if (editForm.value.avatar) {
+      const fd = new FormData();
+      fd.append("name", editForm.value.name);
+      fd.append("username", editForm.value.username);
+      fd.append("avatar", editForm.value.avatar); // ✅ champ PB: avatar
+
+      const record = await pb.collection("users").update(user.value.id, fd);
+      user.value = record;
+    } else {
+      // ✅ Sinon update normal
+      const record = await pb.collection("users").update(user.value.id, {
+        name: editForm.value.name,
+        username: editForm.value.username,
+      });
+      user.value = record;
+    }
+
+    // ✅ refresh authStore (utile si tu utilises pb.authStore.model ailleurs)
+    pb.authStore.save(pb.authStore.token, user.value);
+
+    closeEditModal();
   } catch (e) {
     console.error(e);
-    alert("Erreur lors de la mise à jour : " + e.message);
+    alert("Erreur lors de la mise à jour : " + (e?.message || e));
   } finally {
     isUpdating.value = false;
   }
@@ -70,6 +113,11 @@ const projetPhotoUrl = (projet) => {
 const avatarUrl = computed(() => {
   if (!user.value?.avatar) return null;
   return pb.files.getURL(user.value, user.value.avatar);
+});
+
+// ✅ preview dans la modale (priorité au nouveau fichier si choisi)
+const avatarPreviewUrl = computed(() => {
+  return editForm.value.avatarPreview || avatarUrl.value || null;
 });
 
 const promotionLabel = computed(() => {
@@ -181,6 +229,7 @@ const trackBadge = (t) => parcoursLabel(t);
 const displayName = computed(() => user.value?.name || user.value?.username || "Utilisateur");
 </script>
 
+
 <template>
   <AppHeader />
 
@@ -230,7 +279,10 @@ const displayName = computed(() => user.value?.name || user.value?.username || "
 
           <div class="mt-6 flex flex-wrap items-center gap-4">
             <div class="relative">
-              <select v-model="selectedAnnee" class="appearance-none bg-[#CFFFBC] text-black font-medium rounded-full px-5 py-2 pr-10 shadow">
+              <select
+                v-model="selectedAnnee"
+                class="appearance-none bg-[#CFFFBC] text-black font-medium rounded-full px-5 py-2 pr-10 shadow"
+              >
                 <option value="">Toutes années</option>
                 <option value="1">1ère année</option>
                 <option value="2">2ème année</option>
@@ -240,7 +292,10 @@ const displayName = computed(() => user.value?.name || user.value?.username || "
             </div>
 
             <div class="relative">
-              <select v-model="selectedParcours" class="appearance-none bg-[#CFFFBC] text-black font-medium rounded-full px-5 py-2 pr-10 shadow">
+              <select
+                v-model="selectedParcours"
+                class="appearance-none bg-[#CFFFBC] text-black font-medium rounded-full px-5 py-2 pr-10 shadow"
+              >
                 <option value="">Tous parcours</option>
                 <option value="dev">Développement</option>
                 <option value="créa">Design</option>
@@ -249,7 +304,10 @@ const displayName = computed(() => user.value?.name || user.value?.username || "
               <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-black/70">⌄</span>
             </div>
 
-            <button @click="selectedAnnee = ''; selectedParcours = ''" class="ml-2 text-[#CFFFBC] text-sm hover:underline">
+            <button
+              @click="selectedAnnee = ''; selectedParcours = ''"
+              class="ml-2 text-[#CFFFBC] text-sm hover:underline"
+            >
               Réinitialiser
             </button>
           </div>
@@ -262,24 +320,44 @@ const displayName = computed(() => user.value?.name || user.value?.username || "
                 :to="`/projets/${item.projet.id}`"
                 class="group relative rounded-3xl overflow-hidden bg-black/40 border border-white/10 shadow-xl"
               >
-                <img v-if="projetPhotoUrl(item.projet)" :src="projetPhotoUrl(item.projet)" class="w-full h-56 object-cover opacity-80 group-hover:opacity-95 transition" />
-                <div v-else class="w-full h-56 bg-white/5 flex items-center justify-center text-white/40">Pas de photo</div>
+                <img
+                  v-if="projetPhotoUrl(item.projet)"
+                  :src="projetPhotoUrl(item.projet)"
+                  class="w-full h-56 object-cover opacity-80 group-hover:opacity-95 transition"
+                />
+                <div v-else class="w-full h-56 bg-white/5 flex items-center justify-center text-white/40">
+                  Pas de photo
+                </div>
 
                 <div class="absolute top-4 left-4 flex gap-2">
-                  <span v-if="item.years.length" class="text-xs font-semibold px-3 py-1 rounded-full bg-[#CFFFBC] text-black">{{ yearBadge(item.years[item.years.length - 1]) }}</span>
-                  <span class="text-xs font-semibold px-3 py-1 rounded-full bg-[#CFFFBC] text-black">Collectif</span>
+                  <span
+                    v-if="item.years.length"
+                    class="text-xs font-semibold px-3 py-1 rounded-full bg-[#CFFFBC] text-black"
+                  >
+                    {{ yearBadge(item.years[item.years.length - 1]) }}
+                  </span>
+                  <span class="text-xs font-semibold px-3 py-1 rounded-full bg-[#CFFFBC] text-black">
+                    Collectif
+                  </span>
                 </div>
 
                 <div class="absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-black/90 to-transparent">
-                  <h3 class="text-2xl font-extrabold text-[#CFFFBC]">{{ item.projet.titre || "(Sans titre)" }}</h3>
+                  <h3 class="text-2xl font-extrabold text-[#CFFFBC]">
+                    {{ item.projet.titre || "(Sans titre)" }}
+                  </h3>
                   <div class="mt-2 flex flex-wrap gap-2">
-                    <span v-for="t in item.tracks" :key="t" class="text-[10px] px-2 py-1 rounded-full bg-white/10 border border-white/15 text-white/80">
+                    <span
+                      v-for="t in item.tracks"
+                      :key="t"
+                      class="text-[10px] px-2 py-1 rounded-full bg-white/10 border border-white/15 text-white/80"
+                    >
                       {{ trackBadge(t) }}
                     </span>
                   </div>
                 </div>
               </RouterLink>
             </div>
+
             <p v-else class="text-white/60 mt-6">Aucun projet trouvé.</p>
           </div>
         </div>
@@ -288,12 +366,45 @@ const displayName = computed(() => user.value?.name || user.value?.username || "
 
     <Teleport to="body">
       <div v-if="isEditModalOpen" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" @click="isEditModalOpen = false"></div>
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" @click="closeEditModal"></div>
 
         <div class="relative bg-[#1A1F2B] border border-white/10 w-full max-w-md rounded-3xl p-8 shadow-2xl">
           <h2 class="text-2xl font-bold mb-6 text-[#CFFFBC]">Modifier mon profil</h2>
 
           <form @submit.prevent="handleUpdateProfile" class="space-y-5">
+            <!-- ✅ Avatar -->
+            <div>
+              <label class="block text-sm text-white/60 mb-2">Photo de profil</label>
+
+              <div class="flex items-center gap-4">
+                <div class="w-16 h-16 rounded-full overflow-hidden border border-white/10 bg-white/5 flex items-center justify-center">
+                  <img
+                    v-if="avatarPreviewUrl"
+                    :src="avatarPreviewUrl"
+                    alt="Aperçu avatar"
+                    class="w-full h-full object-cover"
+                  />
+                  <span v-else class="text-xl font-bold text-white/60">
+                    {{ displayName.charAt(0).toUpperCase() }}
+                  </span>
+                </div>
+
+                <label class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition cursor-pointer">
+                  <span class="text-sm text-white/80 font-medium">Choisir un fichier</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    class="hidden"
+                    @change="onAvatarChange"
+                  />
+                </label>
+              </div>
+
+              <p class="mt-2 text-xs text-white/50">
+                Formats image (jpg/png/webp). L’avatar sera enregistré dans le champ <span class="text-white/70">avatar</span>.
+              </p>
+            </div>
+
             <div>
               <label class="block text-sm text-white/60 mb-2">Nom complet</label>
               <input
@@ -317,7 +428,7 @@ const displayName = computed(() => user.value?.name || user.value?.username || "
             <div class="flex gap-3 mt-8">
               <button
                 type="button"
-                @click="isEditModalOpen = false"
+                @click="closeEditModal"
                 class="flex-1 px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 transition font-medium"
               >
                 Annuler
@@ -336,3 +447,4 @@ const displayName = computed(() => user.value?.name || user.value?.username || "
     </Teleport>
   </div>
 </template>
+
