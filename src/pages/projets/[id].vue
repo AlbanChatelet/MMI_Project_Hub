@@ -17,6 +17,9 @@ const groupe = ref(null);
 const membres = ref([]);
 const etapes = ref([]);
 
+// ✅ Livrables
+const livrables = ref([]);
+
 // id du projet depuis l’URL
 const id = computed(() => String(route.params.id || ""));
 
@@ -77,7 +80,7 @@ const userAvatarUrl = (u) => {
   const file = u.avatar || u.photo || u.image;
   if (!file) return null;
   try {
-    return pb.files.getUrl(u, file);
+    return pb.files.getURL(u, file);
   } catch {
     return null;
   }
@@ -91,15 +94,15 @@ const memberSubtitle = (u) => {
 };
 
 const heroImageUrl = computed(() => {
-  if (projet.value?.photo) return pb.files.getUrl(projet.value, projet.value.photo);
-  if (sujet.value?.image_marque) return pb.files.getUrl(sujet.value, sujet.value.image_marque);
-  if (projet.value?.apercu) return pb.files.getUrl(projet.value, projet.value.apercu);
+  if (projet.value?.photo) return pb.files.getURL(projet.value, projet.value.photo);
+  if (sujet.value?.image_marque) return pb.files.getURL(sujet.value, sujet.value.image_marque);
+  if (projet.value?.apercu) return pb.files.getURL(projet.value, projet.value.apercu);
   return null;
 });
 
 const sujetPdfUrl = computed(() => {
   if (!sujet.value?.sujet_pdf) return null;
-  return pb.files.getUrl(sujet.value, sujet.value.sujet_pdf);
+  return pb.files.getURL(sujet.value, sujet.value.sujet_pdf);
 });
 
 const promoBadges = computed(() => {
@@ -132,6 +135,16 @@ const assignedMembers = (e) => {
   return (membres.value || []).filter((u) => set.has(u.id));
 };
 
+// ✅ URL fichier Livrable (champ "fichier" à ajouter dans Livrable si tu veux uploader)
+const livrableFileUrl = (l) => {
+  if (!l?.fichier) return null;
+  try {
+    return pb.files.getURL(l, l.fichier);
+  } catch {
+    return null;
+  }
+};
+
 // Timeout pour éviter requêtes qui pendent
 const withTimeout = (promise, ms = 15000, label = "Requête") => {
   let t;
@@ -154,7 +167,6 @@ const onCoverFileChange = async (e) => {
 
   if (!canEdit.value) {
     coverError.value = "Vous n’avez pas les droits pour modifier ce projet.";
-    // reset input
     if (e?.target) e.target.value = "";
     return;
   }
@@ -334,7 +346,147 @@ const createEtape = async () => {
 };
 
 /* ===========================
-   ✅ Mounted : charger projet + groupe/membres + étapes
+   ✅ Livrables : list + création (édition restreinte)
+   ⚠️ Recommandation PocketBase :
+   - Ajoute un champ "fichier" (File) à la collection Livrable
+   - type_fichier : "document" | "lien"
+   - url_fichier : string/url
+   =========================== */
+
+const showAddLivrable = ref(false);
+const livrableTab = ref("document"); // document | lien
+const creatingLivrable = ref(false);
+const livrableError = ref("");
+const livrableSuccess = ref("");
+
+const livrableForm = ref({
+  titre: "",
+  version: "",
+  url_fichier: "",
+  fichier: null,
+});
+
+const openAddLivrable = () => {
+  livrableError.value = "";
+  livrableSuccess.value = "";
+
+  if (!canEdit.value) {
+    livrableError.value = "Vous n’avez pas les droits pour ajouter des documents sur ce projet.";
+    return;
+  }
+  showAddLivrable.value = true;
+};
+
+const onLivrableFileChange = (e) => {
+  livrableForm.value.fichier = e?.target?.files?.[0] || null;
+};
+
+const reloadLivrables = async () => {
+  const projetId = id.value;
+  if (!projetId) return;
+
+  // Visible = true (si tu veux afficher seulement ceux visibles)
+  // Si tu veux afficher tous les livrables pour les membres du groupe, on peut faire une condition.
+  livrables.value = await withTimeout(
+    pb.collection("Livrable").getFullList({
+      filter: `id_projet = "${projetId}" && visible = true`,
+      sort: "-created",
+    }),
+    15000,
+    "Chargement livrables"
+  );
+};
+
+const createLivrable = async () => {
+  livrableError.value = "";
+  livrableSuccess.value = "";
+
+  if (!canEdit.value) {
+    livrableError.value = "Vous n’avez pas les droits pour ajouter des documents sur ce projet.";
+    return;
+  }
+  if (!projet.value?.id) {
+    livrableError.value = "Projet introuvable.";
+    return;
+  }
+  if (!String(livrableForm.value.titre || "").trim()) {
+    livrableError.value = "Le titre est obligatoire.";
+    return;
+  }
+
+  creatingLivrable.value = true;
+
+  try {
+    // ✅ 1) LIEN → JSON
+    if (livrableTab.value === "lien") {
+      if (!String(livrableForm.value.url_fichier || "").trim()) {
+        livrableError.value = "L’URL est obligatoire pour un lien.";
+        return;
+      }
+
+      await withTimeout(
+        pb.collection("Livrable").create({
+          titre: String(livrableForm.value.titre).trim(),
+          type_fichier: "lien",
+          url_fichier: String(livrableForm.value.url_fichier).trim(),
+          version: String(livrableForm.value.version || "").trim(),
+          date_depot: new Date().toISOString().slice(0, 10),
+          visible: true, // ✅ bool
+          id_projet: projet.value.id,
+          id_createur: authUserId.value || null,
+        }),
+        20000,
+        "Création livrable"
+      );
+    }
+
+    // ✅ 2) DOCUMENT → FormData (upload)
+    if (livrableTab.value === "document") {
+      if (!livrableForm.value.fichier) {
+        livrableError.value = "Veuillez sélectionner un fichier.";
+        return;
+      }
+
+      const fd = new FormData();
+      fd.append("titre", String(livrableForm.value.titre).trim());
+      fd.append("type_fichier", "document");
+      fd.append("url_fichier", ""); // ton champ existe, on met vide
+      fd.append("version", String(livrableForm.value.version || "").trim());
+      fd.append("date_depot", new Date().toISOString().slice(0, 10));
+      fd.append("visible", "true"); // ⚠️ PB accepte souvent en FormData, sinon on enlève ce champ
+      fd.append("id_projet", projet.value.id);
+
+      if (authUserId.value) fd.append("id_createur", authUserId.value);
+
+      // ✅ champ File ajouté dans PB
+      fd.append("fichier", livrableForm.value.fichier);
+
+      await withTimeout(pb.collection("Livrable").create(fd), 20000, "Upload livrable");
+    }
+
+    await reloadLivrables();
+
+    livrableSuccess.value = "Livrable ajouté ✅";
+    showAddLivrable.value = false;
+    livrableForm.value = { titre: "", version: "", url_fichier: "", fichier: null };
+  } catch (err) {
+  console.error("PB ERROR:", err);
+  console.error("PB DATA:", err?.data);
+
+  // Affiche les erreurs de champs si présentes
+  const fieldErrors = err?.data?.data ? JSON.stringify(err.data.data, null, 2) : "";
+  const msg = err?.data?.message || err?.message || "Erreur PocketBase";
+
+  livrableError.value = fieldErrors ? `${msg}\n${fieldErrors}` : msg;
+} finally {
+  creatingLivrable.value = false;
+}
+
+};
+
+
+/* ===========================
+   ✅ Mounted : charger projet + groupe/membres + étapes + livrables
    =========================== */
 onMounted(async () => {
   const projetId = id.value;
@@ -358,11 +510,7 @@ onMounted(async () => {
     const groupeId = projet.value?.groupe;
 
     if (groupeId) {
-      groupe.value = await withTimeout(
-        pb.collection("Groupe").getOne(groupeId),
-        15000,
-        "Chargement groupe"
-      );
+      groupe.value = await withTimeout(pb.collection("Groupe").getOne(groupeId), 15000, "Chargement groupe");
 
       // Membres du groupe (pour affichage + fallback assignation)
       if (Array.isArray(groupe.value?.membres) && groupe.value.membres.length > 0) {
@@ -385,6 +533,9 @@ onMounted(async () => {
 
     // Étapes consultables par tous
     await reloadEtapes();
+
+    // Livrables (visibles) consultables par tous
+    await reloadLivrables();
   } catch (err) {
     console.error(err);
     error.value = err?.message || "Erreur lors du chargement du projet";
@@ -474,7 +625,6 @@ onMounted(async () => {
               <p v-else-if="coverSuccess" class="text-sm text-[#CFFFBC]">{{ coverSuccess }}</p>
             </div>
 
-            <!-- si pas canEdit et erreur cover (au cas où) -->
             <p v-else-if="coverError" class="mt-6 text-sm text-red-300">{{ coverError }}</p>
 
             <div class="mt-12 max-w-2xl">
@@ -626,12 +776,177 @@ onMounted(async () => {
             </div>
           </div>
 
+          <!-- LIENS & DOCUMENTS (Livrables) -->
+          <section class="mt-12">
+            <div class="flex items-end justify-between gap-4 flex-wrap">
+              <h2 class="text-xl font-extrabold text-white">Liens et documents</h2>
+
+              <button
+                v-if="canEdit"
+                class="px-4 py-2 rounded-xl border border-white/20 text-white/70 hover:bg-white/10 transition"
+                @click="openAddLivrable"
+              >
+                + Ajouter un document
+              </button>
+            </div>
+
+            <p v-if="livrableError && !showAddLivrable" class="mt-3 text-sm text-red-300">
+              {{ livrableError }}
+            </p>
+
+            <div v-if="livrables.length" class="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <a
+                v-for="l in livrables"
+                :key="l.id"
+                :href="l.type_fichier === 'lien' ? l.url_fichier : (livrableFileUrl(l) || '#')"
+                target="_blank"
+                rel="noreferrer"
+                class="rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition p-5 flex items-center gap-4"
+              >
+                <div class="w-12 h-12 rounded-xl bg-[#CFFFBC]/10 grid place-items-center text-xl">
+                  <span v-if="l.type_fichier === 'lien'">🔗</span>
+                  <span v-else>📄</span>
+                </div>
+
+                <div class="min-w-0">
+                  <p class="font-extrabold text-[#CFFFBC] truncate">
+                    {{ l.titre }}
+                  </p>
+                  <p class="text-sm text-white/60">
+                    Version : {{ l.version || "—" }}
+                  </p>
+                </div>
+              </a>
+            </div>
+
+            <div
+              v-else
+              class="mt-4 rounded-2xl border border-white/10 bg-black/20 p-5 text-white/70"
+            >
+              Aucun livrable pour le moment.
+            </div>
+
+            <!-- MODAL AJOUT LIVRABLE -->
+            <div
+              v-if="showAddLivrable"
+              class="fixed inset-0 z-50 bg-black/60 grid place-items-center px-6"
+            >
+              <div class="w-full max-w-lg rounded-3xl bg-[#1B2130] border border-white/10 shadow-xl p-7">
+                <div class="flex items-start justify-between gap-4">
+                  <h3 class="text-lg font-extrabold text-white">Ajouter un document</h3>
+
+                  <button class="text-white/60 hover:text-white" @click="showAddLivrable = false">
+                    ✕
+                  </button>
+                </div>
+
+                <!-- Tabs -->
+                <div class="mt-5 flex items-center gap-2 rounded-xl bg-black/20 border border-white/10 p-1">
+                  <button
+                    class="flex-1 py-2 rounded-lg text-sm font-extrabold"
+                    :class="livrableTab === 'document' ? 'bg-[#CFFFBC] text-black' : 'text-white/70 hover:text-white'"
+                    @click="livrableTab = 'document'"
+                    type="button"
+                  >
+                    Document
+                  </button>
+                  <button
+                    class="flex-1 py-2 rounded-lg text-sm font-extrabold"
+                    :class="livrableTab === 'lien' ? 'bg-[#CFFFBC] text-black' : 'text-white/70 hover:text-white'"
+                    @click="livrableTab = 'lien'"
+                    type="button"
+                  >
+                    Lien
+                  </button>
+                </div>
+
+                <div class="mt-5 space-y-4">
+                  <div>
+                    <label class="text-sm text-white/70">Titre</label>
+                    <input
+                      v-model="livrableForm.titre"
+                      class="mt-1 w-full rounded-xl bg-black/20 border border-white/10 px-4 py-3 text-white outline-none focus:border-white/25"
+                      placeholder="Ex : Maquette mobile"
+                    />
+                  </div>
+
+                  <div>
+                    <label class="text-sm text-white/70">Version (optionnel)</label>
+                    <input
+                      v-model="livrableForm.version"
+                      class="mt-1 w-full rounded-xl bg-black/20 border border-white/10 px-4 py-3 text-white outline-none focus:border-white/25"
+                      placeholder="Ex : v1 / v2 / finale"
+                    />
+                  </div>
+
+                  <!-- DOCUMENT -->
+                  <div v-if="livrableTab === 'document'">
+                    <label class="text-sm text-white/70">Fichier</label>
+
+                    <label
+                      class="mt-2 block rounded-2xl border border-white/15 bg-black/20 p-6 text-center cursor-pointer hover:bg-black/25 transition"
+                    >
+                      <div class="text-5xl">📥</div>
+                      <p class="mt-2 text-white/80 font-semibold">
+                        Déposez le fichier pour le téléverser
+                      </p>
+                      <p class="text-sm text-white/60 underline">
+                        Naviguer dans les fichiers
+                      </p>
+
+                      <input type="file" class="hidden" @change="onLivrableFileChange" />
+
+                      <p v-if="livrableForm.fichier" class="mt-3 text-sm text-[#CFFFBC]">
+                        Sélectionné : {{ livrableForm.fichier.name }}
+                      </p>
+                    </label>
+
+                    <p class="mt-2 text-xs text-white/50">
+                      ⚠️ Il faut un champ <span class="font-semibold text-white/70">File</span> nommé
+                      <span class="font-semibold text-white/70">fichier</span> dans la collection Livrable.
+                    </p>
+                  </div>
+
+                  <!-- LIEN -->
+                  <div v-else>
+                    <label class="text-sm text-white/70">URL</label>
+                    <input
+                      v-model="livrableForm.url_fichier"
+                      class="mt-1 w-full rounded-xl bg-black/20 border border-white/10 px-4 py-3 text-white outline-none focus:border-white/25"
+                      placeholder="https://..."
+                    />
+                  </div>
+
+                  <p v-if="livrableError" class="text-sm text-red-300">{{ livrableError }}</p>
+                  <p v-else-if="livrableSuccess" class="text-sm text-[#CFFFBC]">{{ livrableSuccess }}</p>
+
+                  <div class="pt-2 flex items-center justify-end gap-3">
+                    <button
+                      class="px-4 py-2 rounded-full bg-white/10 border border-white/15 hover:bg-white/15 transition text-sm font-semibold text-white"
+                      :disabled="creatingLivrable"
+                      @click="showAddLivrable = false"
+                    >
+                      Annuler
+                    </button>
+
+                    <button
+                      class="px-4 py-2 rounded-full bg-[#CFFFBC]/20 border border-[#CFFFBC]/30 hover:bg-[#CFFFBC]/25 transition text-sm font-extrabold text-[#CFFFBC]"
+                      :disabled="creatingLivrable"
+                      @click="createLivrable"
+                    >
+                      {{ creatingLivrable ? "Envoi..." : "Enregistrer les modifications" }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <!-- TO DO LIST -->
           <section class="mt-12">
             <div class="flex items-center justify-between gap-4 flex-wrap">
               <h2 class="text-xl font-extrabold text-white">To do list</h2>
 
-              <!-- Bouton uniquement si canEdit -->
               <button
                 v-if="canEdit"
                 class="px-4 py-2 rounded-full bg-[#CFFFBC]/15 border border-[#CFFFBC]/25 hover:bg-[#CFFFBC]/20 transition text-sm font-semibold text-[#CFFFBC]"
@@ -640,10 +955,7 @@ onMounted(async () => {
                 + Ajouter une étape
               </button>
 
-              <span
-                v-else
-                class="text-sm text-white/55"
-              >
+              <span v-else class="text-sm text-white/55">
                 Vous pouvez consulter les étapes (édition réservée aux membres du groupe)
               </span>
             </div>
@@ -664,7 +976,10 @@ onMounted(async () => {
                       {{ e.titre }}
                     </h3>
 
-                    <div v-if="typeof e.progress === 'number'" class="text-3xl font-extrabold text-[#CFFFBC]">
+                    <div
+                      v-if="typeof e.progress === 'number'"
+                      class="text-3xl font-extrabold text-[#CFFFBC]"
+                    >
                       {{ e.progress }}%
                     </div>
                   </div>
@@ -721,7 +1036,7 @@ onMounted(async () => {
               Aucune étape pour le moment.
             </div>
 
-            <!-- MODAL création étape (uniquement utile si canEdit) -->
+            <!-- MODAL création étape -->
             <div
               v-if="showAddEtape"
               class="fixed inset-0 z-50 bg-black/60 grid place-items-center px-6"
