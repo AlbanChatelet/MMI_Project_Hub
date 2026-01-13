@@ -92,7 +92,6 @@ const sujetPdfUrl = computed(() => {
 });
 
 // --- promo chips (année + parcours) ---
-// promo = relation multiple vers Promotion, donc on prend expand.promo[]
 const promoBadges = computed(() => {
   const promos = projet.value?.expand?.promo;
   if (!Array.isArray(promos)) return [];
@@ -104,6 +103,150 @@ const promoBadges = computed(() => {
     presentable: pr.presentable,
   }));
 });
+
+/* ===========================
+   ✅ Couverture : upload / update
+   =========================== */
+const coverUploading = ref(false);
+const coverError = ref("");
+const coverSuccess = ref("");
+
+const onCoverFileChange = async (e) => {
+  coverError.value = "";
+  coverSuccess.value = "";
+
+  const file = e?.target?.files?.[0];
+  if (!file || !projet.value?.id) return;
+
+  if (!file.type.startsWith("image/")) {
+    coverError.value = "Le fichier doit être une image (jpg, png, webp...).";
+    e.target.value = "";
+    return;
+  }
+
+  const maxMb = 5;
+  if (file.size > maxMb * 1024 * 1024) {
+    coverError.value = `Image trop lourde (max ${maxMb} Mo).`;
+    e.target.value = "";
+    return;
+  }
+
+  coverUploading.value = true;
+
+  try {
+    const formData = new FormData();
+    formData.append("photo", file);
+
+    const updated = await pb.collection("Projet").update(projet.value.id, formData);
+    projet.value = { ...projet.value, ...updated };
+
+    coverSuccess.value = "Image de couverture mise à jour ✅";
+  } catch (err) {
+    console.error(err);
+    coverError.value = err?.message || "Erreur lors de la mise à jour de l’image";
+  } finally {
+    coverUploading.value = false;
+    e.target.value = "";
+  }
+};
+
+const removeCover = async () => {
+  if (!projet.value?.id) return;
+  coverError.value = "";
+  coverSuccess.value = "";
+  coverUploading.value = true;
+
+  try {
+    const updated = await pb.collection("Projet").update(projet.value.id, { photo: null });
+    projet.value = { ...projet.value, ...updated };
+    coverSuccess.value = "Image de couverture supprimée ✅";
+  } catch (err) {
+    console.error(err);
+    coverError.value = err?.message || "Erreur lors de la suppression de l’image";
+  } finally {
+    coverUploading.value = false;
+  }
+};
+
+/* ===========================
+   ✅ Étapes : création + assignation membres
+   =========================== */
+const showAddEtape = ref(false);
+const creatingEtape = ref(false);
+const etapeError = ref("");
+const etapeSuccess = ref("");
+
+const etapeForm = ref({
+  titre: "",
+  description: "",
+  date_debut: "",
+  date_fin: "",
+  statut: "todo", // adapte si besoin
+  progress: 0, // nécessite un champ number "progress" dans Etape (optionnel)
+  membres: [], // nécessite un champ relation multiple "membres" dans Etape
+});
+
+const formatDateFr = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "long" });
+};
+
+const reloadEtapes = async () => {
+  const projetId = id.value;
+  etapes.value = await pb.collection("Etape").getFullList({
+    filter: `id_projet = "${projetId}"`,
+    sort: "date_debut",
+    expand: "membres",
+  });
+};
+
+const createEtape = async () => {
+  etapeError.value = "";
+  etapeSuccess.value = "";
+
+  if (!projet.value?.id) return;
+
+  if (!etapeForm.value.titre.trim()) {
+    etapeError.value = "Le titre est obligatoire.";
+    return;
+  }
+
+  creatingEtape.value = true;
+
+  try {
+    await pb.collection("Etape").create({
+      titre: etapeForm.value.titre.trim(),
+      description: etapeForm.value.description?.trim() || "",
+      date_debut: etapeForm.value.date_debut || null,
+      date_fin: etapeForm.value.date_fin || null,
+      statut: etapeForm.value.statut || "todo",
+      progress: Number(etapeForm.value.progress || 0),
+      id_projet: projet.value.id,
+      membres: etapeForm.value.membres || [],
+    });
+
+    await reloadEtapes();
+
+    etapeSuccess.value = "Étape ajoutée ✅";
+    showAddEtape.value = false;
+
+    etapeForm.value = {
+      titre: "",
+      description: "",
+      date_debut: "",
+      date_fin: "",
+      statut: "todo",
+      progress: 0,
+      membres: [],
+    };
+  } catch (err) {
+    console.error(err);
+    etapeError.value = err?.message || "Erreur lors de la création de l’étape";
+  } finally {
+    creatingEtape.value = false;
+  }
+};
 
 onMounted(async () => {
   const projetId = id.value;
@@ -122,11 +265,8 @@ onMounted(async () => {
     // 2) Sujet via expand (relation Projet.sujet -> sujets)
     sujet.value = projet.value?.expand?.sujet || null;
 
-    // 3) Étapes liées au projet
-    etapes.value = await pb.collection("Etape").getFullList({
-      filter: `id_projet = "${projetId}"`,
-      sort: "date_debut",
-    });
+    // 3) Étapes liées au projet (avec membres assignés)
+    await reloadEtapes();
 
     // 4) Groupe lié au projet
     const groupeId = projet.value.groupe;
@@ -156,8 +296,6 @@ onMounted(async () => {
   }
 });
 </script>
-
-
 
 <template>
   <div class="min-h-screen bg-[#151A24] text-white">
@@ -194,17 +332,46 @@ onMounted(async () => {
         <!-- top content -->
         <div class="absolute inset-0">
           <div class="max-w-6xl mx-auto px-6 pt-48">
-            <button
-              class="text-[#CFFFBC] hover:underline"
-              @click="$router.back()"
-            >
+            <button class="text-[#CFFFBC] hover:underline" @click="$router.back()">
               ← Retour
             </button>
 
-            <div class="mt-12 max-w-2xl">
-              <h1
-                class="text-4xl md:text-5xl font-extrabold text-[#CFFFBC] leading-tight"
+            <!-- Actions couverture -->
+            <div class="mt-6 flex items-center gap-3 flex-wrap">
+              <label
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 border border-white/15 hover:bg-white/15 transition cursor-pointer"
               >
+                <span class="text-sm font-semibold text-white">
+                  {{ coverUploading ? "Upload..." : "Changer la couverture" }}
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  class="hidden"
+                  :disabled="coverUploading"
+                  @change="onCoverFileChange"
+                />
+              </label>
+
+              <button
+                v-if="projet?.photo"
+                class="px-4 py-2 rounded-full bg-red-500/15 border border-red-300/20 hover:bg-red-500/20 transition text-sm font-semibold text-red-200"
+                :disabled="coverUploading"
+                @click="removeCover"
+              >
+                Retirer
+              </button>
+
+              <p v-if="coverError" class="text-sm text-red-300">
+                {{ coverError }}
+              </p>
+              <p v-else-if="coverSuccess" class="text-sm text-[#CFFFBC]">
+                {{ coverSuccess }}
+              </p>
+            </div>
+
+            <div class="mt-12 max-w-2xl">
+              <h1 class="text-4xl md:text-5xl font-extrabold text-[#CFFFBC] leading-tight">
                 {{ projet?.titre || "(Sans titre)" }}
               </h1>
 
@@ -224,9 +391,7 @@ onMounted(async () => {
 
       <!-- CONTENT PANEL -->
       <section class="max-w-6xl mx-auto px-6 mt-12 pb-16">
-        <div
-          class="rounded-3xl bg-[#1B2130] border border-white/10 shadow-xl p-8"
-        >
+        <div class="rounded-3xl bg-[#1B2130] border border-white/10 shadow-xl p-8">
           <!-- DESCRIPTION (depuis la collection sujets) -->
           <div class="text-white/85 leading-relaxed whitespace-pre-line">
             {{ sujet?.description || "Aucune description." }}
@@ -367,26 +532,233 @@ onMounted(async () => {
             </div>
           </div>
 
-          <!-- (optionnel) Étapes - si tu veux les afficher plus bas -->
-          <!--
-          <div class="mt-12">
-            <h2 class="text-xl font-extrabold text-white mb-4">Étapes</h2>
-            <div v-if="etapes.length" class="space-y-3">
-              <div
+          <!-- TO DO LIST -->
+          <section class="mt-12">
+            <div class="flex items-center justify-between gap-4 flex-wrap">
+              <h2 class="text-xl font-extrabold text-white">To do list</h2>
+
+              <button
+                class="px-4 py-2 rounded-full bg-[#CFFFBC]/15 border border-[#CFFFBC]/25 hover:bg-[#CFFFBC]/20 transition text-sm font-semibold text-[#CFFFBC]"
+                @click="showAddEtape = true"
+              >
+                + Ajouter une étape
+              </button>
+            </div>
+
+            <div v-if="etapes.length" class="mt-5 flex gap-4 overflow-x-auto pb-3">
+              <article
                 v-for="e in etapes"
                 :key="e.id"
-                class="rounded-xl bg-white/5 border border-white/10 p-5"
+                class="min-w-[320px] max-w-[360px] rounded-2xl bg-[#2B3140] border border-white/10 overflow-hidden"
               >
-                <p class="font-bold text-white">{{ e.titre }}</p>
-                <p class="text-white/70 text-sm mt-1 whitespace-pre-line">{{ e.description }}</p>
+                <div class="p-5">
+                  <div class="flex items-start justify-between gap-4">
+                    <h3 class="text-lg font-extrabold text-[#CFFFBC] leading-tight">
+                      {{ e.titre }}
+                    </h3>
+
+                    <div v-if="typeof e.progress === 'number'" class="text-3xl font-extrabold text-[#CFFFBC]">
+                      {{ e.progress }}%
+                    </div>
+                  </div>
+
+                  <div class="mt-3 flex items-center gap-2 flex-wrap">
+                    <template v-for="u in (e.expand?.membres || [])" :key="u.id">
+                      <div
+                        class="w-7 h-7 rounded-full overflow-hidden border border-white/10 bg-white/5 grid place-items-center"
+                        title="Assigné"
+                      >
+                        <img
+                          v-if="userAvatarUrl(u)"
+                          :src="userAvatarUrl(u)"
+                          alt=""
+                          class="w-full h-full object-cover"
+                        />
+                        <span v-else class="text-[10px] font-extrabold text-white/70">
+                          {{ initials(userDisplayName(u)) }}
+                        </span>
+                      </div>
+                    </template>
+
+                    <span v-if="!(e.expand?.membres || []).length" class="text-white/50 text-sm">
+                      Aucun membre assigné
+                    </span>
+                  </div>
+
+                  <p class="mt-3 text-sm text-white/60">
+                    Statut :
+                    <span class="text-white/80 font-semibold">{{ e.statut || "—" }}</span>
+                  </p>
+                </div>
+
+                <div v-if="typeof e.progress === 'number'" class="h-2 bg-black/30">
+                  <div
+                    class="h-full bg-[#CFFFBC]"
+                    :style="{ width: `${Math.max(0, Math.min(100, e.progress))}%` }"
+                  />
+                </div>
+
+                <div
+                  v-if="e.date_fin"
+                  class="px-5 py-3 bg-red-600/90 text-red-50 text-sm font-semibold flex items-center gap-2"
+                >
+                  ⏱️ A finir pour le {{ formatDateFr(e.date_fin) }}
+                </div>
+              </article>
+            </div>
+
+            <div
+              v-else
+              class="mt-4 rounded-2xl border border-white/10 bg-black/20 p-5 text-white/70"
+            >
+              Aucune étape pour le moment.
+            </div>
+
+            <!-- MODAL création étape -->
+            <div
+              v-if="showAddEtape"
+              class="fixed inset-0 z-50 bg-black/60 grid place-items-center px-6"
+            >
+              <div class="w-full max-w-xl rounded-3xl bg-[#1B2130] border border-white/10 shadow-xl p-7">
+                <div class="flex items-start justify-between gap-4">
+                  <h3 class="text-lg font-extrabold text-white">Ajouter une étape</h3>
+
+                  <button class="text-white/60 hover:text-white" @click="showAddEtape = false">
+                    ✕
+                  </button>
+                </div>
+
+                <div class="mt-5 space-y-4">
+                  <div>
+                    <label class="text-sm text-white/70">Titre</label>
+                    <input
+                      v-model="etapeForm.titre"
+                      class="mt-1 w-full rounded-xl bg-black/20 border border-white/10 px-4 py-3 text-white outline-none focus:border-white/25"
+                      placeholder="Ex : Faire la maquette mobile"
+                    />
+                  </div>
+
+                  <div>
+                    <label class="text-sm text-white/70">Description (optionnel)</label>
+                    <textarea
+                      v-model="etapeForm.description"
+                      class="mt-1 w-full min-h-[90px] rounded-xl bg-black/20 border border-white/10 px-4 py-3 text-white outline-none focus:border-white/25"
+                      placeholder="Détails..."
+                    />
+                  </div>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label class="text-sm text-white/70">Date début</label>
+                      <input
+                        v-model="etapeForm.date_debut"
+                        type="date"
+                        class="mt-1 w-full rounded-xl bg-black/20 border border-white/10 px-4 py-3 text-white outline-none focus:border-white/25"
+                      />
+                    </div>
+
+                    <div>
+                      <label class="text-sm text-white/70">Date fin</label>
+                      <input
+                        v-model="etapeForm.date_fin"
+                        type="date"
+                        class="mt-1 w-full rounded-xl bg-black/20 border border-white/10 px-4 py-3 text-white outline-none focus:border-white/25"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label class="text-sm text-white/70">Statut</label>
+                      <select
+                        v-model="etapeForm.statut"
+                        class="mt-1 w-full rounded-xl bg-black/20 border border-white/10 px-4 py-3 text-white outline-none focus:border-white/25"
+                      >
+                        <option value="todo">À faire</option>
+                        <option value="en_cours">En cours</option>
+                        <option value="done">Terminé</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label class="text-sm text-white/70">Progress (%)</label>
+                      <input
+                        v-model.number="etapeForm.progress"
+                        type="number"
+                        min="0"
+                        max="100"
+                        class="mt-1 w-full rounded-xl bg-black/20 border border-white/10 px-4 py-3 text-white outline-none focus:border-white/25"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label class="text-sm text-white/70">Assigner des membres (optionnel)</label>
+
+                    <div v-if="membres.length" class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <label
+                        v-for="u in membres"
+                        :key="u.id"
+                        class="flex items-center gap-3 rounded-xl bg-white/5 border border-white/10 px-4 py-3 cursor-pointer hover:bg-white/10"
+                      >
+                        <input
+                          type="checkbox"
+                          class="accent-[#CFFFBC]"
+                          :value="u.id"
+                          v-model="etapeForm.membres"
+                        />
+
+                        <div
+                          class="w-8 h-8 rounded-full overflow-hidden border border-white/10 bg-white/5 grid place-items-center"
+                        >
+                          <img
+                            v-if="userAvatarUrl(u)"
+                            :src="userAvatarUrl(u)"
+                            alt=""
+                            class="w-full h-full object-cover"
+                          />
+                          <span v-else class="text-[10px] font-extrabold text-white/70">
+                            {{ initials(userDisplayName(u)) }}
+                          </span>
+                        </div>
+
+                        <span class="text-sm text-white/85 font-semibold">
+                          {{ userDisplayName(u) }}
+                        </span>
+                      </label>
+                    </div>
+
+                    <p v-else class="mt-2 text-sm text-white/50">
+                      Aucun membre trouvé dans le groupe.
+                    </p>
+                  </div>
+
+                  <p v-if="etapeError" class="text-sm text-red-300">{{ etapeError }}</p>
+                  <p v-else-if="etapeSuccess" class="text-sm text-[#CFFFBC]">{{ etapeSuccess }}</p>
+
+                  <div class="pt-2 flex items-center justify-end gap-3">
+                    <button
+                      class="px-4 py-2 rounded-full bg-white/10 border border-white/15 hover:bg-white/15 transition text-sm font-semibold text-white"
+                      @click="showAddEtape = false"
+                    >
+                      Annuler
+                    </button>
+
+                    <button
+                      class="px-4 py-2 rounded-full bg-[#CFFFBC]/20 border border-[#CFFFBC]/30 hover:bg-[#CFFFBC]/25 transition text-sm font-extrabold text-[#CFFFBC]"
+                      :disabled="creatingEtape"
+                      @click="createEtape"
+                    >
+                      {{ creatingEtape ? "Création..." : "Créer l’étape" }}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-            <p v-else class="text-white/60 text-sm">Aucune étape pour le moment.</p>
-          </div>
-          -->
+          </section>
+
         </div>
       </section>
     </template>
   </div>
 </template>
-
