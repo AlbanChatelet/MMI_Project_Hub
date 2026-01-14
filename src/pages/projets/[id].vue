@@ -68,6 +68,17 @@ const userDisplayName = (u) => {
   return full || u?.name || u?.username || u?.email || "Utilisateur";
 };
 
+// ✅ Icône selon le type de livrable (anti-crash)
+const livrableIcon = (l) => {
+  const type = String(l?.type_fichier || "").toLowerCase();
+
+  if (type === "lien") return "🔗";
+  if (type === "document") return "📄";
+
+  // fallback si la donnée est inattendue (évite page blanche)
+  return "📁";
+};
+
 const initials = (name) => {
   const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
   const a = parts[0]?.[0] || "";
