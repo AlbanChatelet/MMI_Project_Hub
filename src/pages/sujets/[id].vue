@@ -51,11 +51,9 @@ const commanditaireAvatarUrl = (u) => {
 };
 
 const commanditaireInitial = (u) => {
-  const name =
-    u?.name || u?.username || u?.email || "";
+  const name = u?.name || u?.username || u?.email || "";
   return name ? name.charAt(0).toUpperCase() : "?";
 };
-
 
 const canEditSujet = computed(() => {
   if (!authUser.value?.id) return false;
@@ -127,9 +125,7 @@ const userAvatarUrl = (u) => {
   }
 };
 
-const selectedUsers = computed(() =>
-  users.value.filter((u) => selectedIds.value.includes(u.id))
-);
+const selectedUsers = computed(() => users.value.filter((u) => selectedIds.value.includes(u.id)));
 
 const filteredUsers = computed(() => {
   const q = search.value.trim().toLowerCase();
@@ -195,7 +191,7 @@ const removeMember = (userId) => {
   selectedIds.value = selectedIds.value.filter((id) => id !== userId);
 };
 
-// ✅✅✅ ICI : on ajoute l'UPDATE du Groupe pour remplir "projet"
+// ✅✅✅ ICI : on copie users.promotion -> Projet.promo (relation MULTIPLE vers Promotion)
 const createGroup = async () => {
   submitLoading.value = true;
   submitError.value = "";
@@ -205,6 +201,22 @@ const createGroup = async () => {
     if (!canActuallyRequest.value) throw new Error("Sujet non vérifié (demande impossible).");
     if (!sujet.value) throw new Error("Sujet non chargé.");
     if (selectedIds.value.length === 0) throw new Error("Ajoute au moins 1 membre dans le groupe.");
+
+    // ✅ promo(s) venant de l'utilisateur connecté
+    // users.promotion peut être :
+    // - string (id d'une promo)
+    // - array (plusieurs ids)
+    const promoRaw = authUser.value?.promotion;
+
+    const promoIds = Array.isArray(promoRaw)
+      ? promoRaw.filter(Boolean).map(String)
+      : promoRaw
+        ? [String(promoRaw)]
+        : [];
+
+    if (promoIds.length === 0) {
+      throw new Error("Promotion introuvable sur votre compte (champ users.promotion).");
+    }
 
     // 1) Création groupe
     const groupPayload = {
@@ -222,6 +234,10 @@ const createGroup = async () => {
     fd.append("sujet", sujet.value.id);
     fd.append("id_sujet", sujet.value.id);
     fd.append("groupe", createdGroup.id);
+
+    // ✅ Projet.promo est un champ relationnel MULTIPLE :
+    // => FormData : append plusieurs fois la même clé
+    promoIds.forEach((pid) => fd.append("promo", pid));
 
     if (sujet.value.image_marque) {
       const url = pb.files.getURL(sujet.value, sujet.value.image_marque);
@@ -429,36 +445,35 @@ onMounted(async () => {
               </span>
 
               <div class="flex items-center gap-2 text-sm text-white/60">
-  <span>Commanditaire :</span>
+                <span>Commanditaire :</span>
 
-  <div class="flex items-center gap-2">
-    <!-- Avatar -->
-    <div
-      class="w-6 h-6 rounded-full overflow-hidden border border-white/10 bg-white/5 flex items-center justify-center text-xs font-bold text-white"
-    >
-      <img
-        v-if="commanditaireAvatarUrl(sujet?.expand?.commanditaire)"
-        :src="commanditaireAvatarUrl(sujet?.expand?.commanditaire)"
-        alt="Avatar commanditaire"
-        class="w-full h-full object-cover"
-      />
-      <span v-else>
-        {{ commanditaireInitial(sujet?.expand?.commanditaire) }}
-      </span>
-    </div>
+                <div class="flex items-center gap-2">
+                  <!-- Avatar -->
+                  <div
+                    class="w-6 h-6 rounded-full overflow-hidden border border-white/10 bg-white/5 flex items-center justify-center text-xs font-bold text-white"
+                  >
+                    <img
+                      v-if="commanditaireAvatarUrl(sujet?.expand?.commanditaire)"
+                      :src="commanditaireAvatarUrl(sujet?.expand?.commanditaire)"
+                      alt="Avatar commanditaire"
+                      class="w-full h-full object-cover"
+                    />
+                    <span v-else>
+                      {{ commanditaireInitial(sujet?.expand?.commanditaire) }}
+                    </span>
+                  </div>
 
-    <!-- Nom -->
-    <span class="text-white font-semibold">
-      {{
-        sujet?.expand?.commanditaire?.name
-          || sujet?.expand?.commanditaire?.username
-          || sujet?.expand?.commanditaire?.email
-          || "Non renseigné"
-      }}
-    </span>
-  </div>
-</div>
-
+                  <!-- Nom -->
+                  <span class="text-white font-semibold">
+                    {{
+                      sujet?.expand?.commanditaire?.name
+                        || sujet?.expand?.commanditaire?.username
+                        || sujet?.expand?.commanditaire?.email
+                        || "Non renseigné"
+                    }}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -598,7 +613,6 @@ onMounted(async () => {
 
     <!-- ==========================
          MODALE EDIT (PROF/ADMIN)
-         ✅ FIX: scroll + bouton visible
     =========================== -->
     <div
       v-if="editOpen"
@@ -608,12 +622,10 @@ onMounted(async () => {
     >
       <div class="absolute inset-0 bg-black/70" @click="closeEdit" />
 
-      <!-- ✅ max height + layout colonne -->
       <div
         class="relative w-full max-w-2xl rounded-2xl border border-white/10 bg-[#1C2230] shadow-2xl
                max-h-[90vh] flex flex-col"
       >
-        <!-- ✅ Header fixe -->
         <div class="p-6 md:p-7 border-b border-white/10">
           <div class="flex items-start justify-between gap-4">
             <div>
@@ -632,7 +644,6 @@ onMounted(async () => {
           </div>
         </div>
 
-        <!-- ✅ Body scrollable -->
         <div class="flex-1 overflow-y-auto p-6 md:p-7">
           <form class="space-y-4" @submit.prevent="saveEdit">
             <div>
@@ -726,7 +737,6 @@ onMounted(async () => {
               </div>
             </div>
 
-            <!-- ✅ Validation (boolean) -->
             <div class="rounded-xl bg-black/20 border border-white/10 p-4">
               <label class="flex items-center gap-3 cursor-pointer">
                 <input
@@ -744,13 +754,10 @@ onMounted(async () => {
             </div>
 
             <p v-if="editError" class="text-red-300 font-medium">{{ editError }}</p>
-
-            <!-- ✅ espace en bas pour respirer -->
             <div class="h-2"></div>
           </form>
         </div>
 
-        <!-- ✅ Footer sticky : bouton toujours visible -->
         <div class="p-6 md:p-7 border-t border-white/10 bg-[#1C2230]">
           <button
             type="button"
@@ -767,7 +774,6 @@ onMounted(async () => {
 
     <!-- ==========================
          MODALE "Demander ce projet"
-         (affichée seulement si étudiant + sujet vérifié)
     =========================== -->
     <div
       v-if="modalOpen && canRequestProject && isVerified"
@@ -782,7 +788,6 @@ onMounted(async () => {
           <div class="flex items-start justify-between gap-4">
             <div>
               <h2 class="text-3xl font-extrabold text-[#CFFFBC]">Demander ce projet</h2>
-              
             </div>
 
             <button
@@ -842,19 +847,14 @@ onMounted(async () => {
 
             <div v-if="addingSelectOpen" class="mt-3 rounded-xl border border-white/10 bg-black/20 p-4">
               <div class="flex flex-col gap-3">
-                <input
-                  v-model="search"
-                  type="text"
-                  placeholder="Rechercher un utilisateur (nom / email)…"
-                  class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm outline-none focus:border-white/30"
-                />
+                
 
                 <select
                   v-model="selectedToAdd"
                   class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm outline-none focus:border-white/30"
                 >
                   <option value="">— Choisir un utilisateur —</option>
-                  <option v-for="u in availableUsers" :key="u.id" :value="u.id">
+                  <option v-for="u in availableUsers" :key="u.id" :value="u.id" class="text-black">
                     {{ userDisplayName(u) }} — {{ u.email }}
                   </option>
                 </select>
