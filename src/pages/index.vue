@@ -3,6 +3,7 @@
 import { ref, onMounted } from "vue";
 import { pb } from "../pb";
 import HeaderMain from "../components/HeaderMain.vue";
+import UserIcon from "../components/icons/UserIcon.vue";
 
 const projets = ref([]);
 const groupes = ref([]);
@@ -18,27 +19,26 @@ const getGroupeByProjetId = (projetId) => {
   );
 };
 
-const getGroupeNom = (projetId) => {
-  const groupe = getGroupeByProjetId(projetId);
-  return groupe?.nom || null;
-};
-
 const getGroupeMembres = (projetId) => {
   const groupe = getGroupeByProjetId(projetId);
   const membres = groupe?.expand?.membres;
   return Array.isArray(membres) ? membres : [];
 };
 
-const formatMembres = (projetId) => {
-  return getGroupeMembres(projetId)
-    .map((m) => m.name || m.username || m.email)
-    .join(", ");
+// Affiche max 3 membres + "+X"
+const formatMembres = (projetId, max = 3) => {
+  const membres = getGroupeMembres(projetId);
+  const names = membres.map((m) => m.name || m.username || m.email);
+
+  const shown = names.slice(0, max);
+  const remaining = names.length - shown.length;
+
+  return remaining > 0 ? `${shown.join(", ")} +${remaining}` : shown.join(", ");
 };
 
 onMounted(async () => {
   try {
     const [projetsRes, groupesRes] = await Promise.all([
-      // ✅ UNIQUEMENT les projets favoris (max 4)
       pb.collection("Projet").getList(1, 4, {
         filter: "favoris = true",
         sort: "-created",
@@ -59,15 +59,15 @@ onMounted(async () => {
 
 <template>
   <!-- Wrapper global -->
-  <div class="w-full h-screen bg-black relative overflow-y-auto md:overflow-hidden">
+  <div
+    class="w-full h-screen bg-black relative overflow-y-auto md:overflow-hidden text-[#CCFFBC]"
+  >
     <!-- Header -->
     <HeaderMain />
 
     <main class="w-full h-full">
       <!-- Loading -->
-      <p v-if="loading" class="text-white text-center mt-10 text-xl">
-        Chargement...
-      </p>
+      <p v-if="loading" class="text-center mt-10 text-xl">Chargement...</p>
 
       <!-- Erreur -->
       <p v-else-if="error" class="text-red-500 text-center mt-10 text-xl">
@@ -75,28 +75,31 @@ onMounted(async () => {
       </p>
 
       <!-- Grille -->
-      <div
-        v-else
-        class="grid grid-cols-1 md:grid-cols-4 w-full h-auto md:h-full"
-      >
+      <div v-else class="grid grid-cols-1 md:grid-cols-4 w-full h-auto md:h-full">
         <RouterLink
           v-for="projet in projets"
           :key="projet.id"
           :to="`/projets/${projet.id}`"
-          class="relative group overflow-hidden h-screen md:h-full"
+          class="
+            relative group overflow-hidden h-screen md:h-full
+            text-[#CCFFBC]
+
+            border-b-2 border-[#CCFFBC]
+            md:border-b-0 md:border-r-2
+            last:border-b-0 md:last:border-r-0
+          "
         >
           <!-- Image -->
           <img
             v-if="projet.photo"
             :src="pb.files.getUrl(projet, projet.photo)"
-            class="absolute inset-0 w-full h-full object-cover
-                   transform group-hover:scale-110 transition duration-700"
+            class="absolute inset-0 w-full h-full object-cover transform group-hover:scale-110 transition duration-700"
             alt="Aperçu du projet"
           />
 
           <div
             v-else
-            class="absolute inset-0 bg-gray-800 flex items-center justify-center text-white"
+            class="absolute inset-0 bg-gray-800 flex items-center justify-center"
           >
             Aucun aperçu
           </div>
@@ -106,19 +109,18 @@ onMounted(async () => {
 
           <!-- Contenu -->
           <div class="absolute bottom-0 left-0 right-0 p-6">
-            <h3 class="text-white text-3xl font-bold drop-shadow-lg">
+            <h3 class="text-5xl font-bold drop-shadow-lg">
               {{ projet.titre }}
             </h3>
 
-            <p v-if="getGroupeNom(projet.id)" class="text-white/90 text-sm mt-1">
-              {{ getGroupeNom(projet.id) }}
-            </p>
-
             <p
               v-if="getGroupeMembres(projet.id).length"
-              class="text-white/80 text-xs mt-1 leading-snug"
+              class="text-xs mt-3 leading-snug flex items-start gap-2"
             >
-              👤 {{ formatMembres(projet.id) }}
+              <UserIcon class="mt-[2px] shrink-0" />
+              <span>
+                {{ formatMembres(projet.id, 3) }}
+              </span>
             </p>
           </div>
         </RouterLink>
