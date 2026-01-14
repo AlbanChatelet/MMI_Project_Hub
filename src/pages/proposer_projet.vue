@@ -1,11 +1,8 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <script setup>
 import { ref, computed } from "vue";
-import { useRouter } from "vue-router";
 import AppHeader from "@/components/AppHeader.vue";
 import { pb } from "../pb";
-
-const router = useRouter();
 
 const loading = ref(false);
 const error = ref("");
@@ -19,6 +16,9 @@ const description = ref("");
 const objectifs = ref("");
 const mail = ref("");
 
+// ✅ nouveau : nom externe (entreprise/personne non inscrite)
+const nomExterne = ref("");
+
 // compétences (select multiple)
 const competencesOptions = ["SEO", "Design", "Développement", "W"];
 const competences = ref([]);
@@ -27,13 +27,9 @@ const competences = ref([]);
 const imageMarqueFile = ref(null);
 const sujetPdfFile = ref(null);
 
-// utilisateur connecté
+// utilisateur connecté (optionnel)
 const authUser = computed(() => pb.authStore?.record || null);
-
-// ✅ rôles autorisés
-const userType = computed(() => authUser.value?.type_utilisateur || authUser.value?.type || authUser.value?.role || "");
 const isLoggedIn = computed(() => !!authUser.value?.id);
-const canPropose = computed(() => ["prof", "admin"].includes(String(userType.value).toLowerCase()));
 
 // helpers
 const onPickImageMarque = (e) => {
@@ -61,6 +57,7 @@ const resetForm = () => {
   description.value = "";
   objectifs.value = "";
   mail.value = "";
+  nomExterne.value = "";
   competences.value = [];
   imageMarqueFile.value = null;
   sujetPdfFile.value = null;
@@ -73,16 +70,6 @@ const submit = async () => {
   error.value = "";
   success.value = false;
 
-  // ✅ Garde-fou : même si quelqu’un force l’affichage du form
-  if (!isLoggedIn.value) {
-    error.value = "Vous devez être connecté pour proposer un sujet.";
-    return;
-  }
-  if (!canPropose.value) {
-    error.value = "Vous n'avez pas les droits pour proposer un sujet.";
-    return;
-  }
-
   // 🔒 validations
   if (!titre.value.trim()) return (error.value = "Le titre est obligatoire.");
   if (!annee.value) return (error.value = "Veuillez sélectionner une année.");
@@ -91,10 +78,9 @@ const submit = async () => {
   if (!objectifs.value.trim()) return (error.value = "Les objectifs sont obligatoires.");
   if (!mail.value.trim()) return (error.value = "L'email est obligatoire.");
 
-  const user = pb.authStore?.record;
-  if (!user?.id) {
-    error.value = "Vous devez être connecté pour proposer un sujet.";
-    return;
+  // ✅ si pas connecté : on exige le nom externe
+  if (!isLoggedIn.value && !nomExterne.value.trim()) {
+    return (error.value = "Veuillez indiquer votre nom / entreprise (nom externe).");
   }
 
   loading.value = true;
@@ -113,8 +99,22 @@ const submit = async () => {
       formData.append("competences", c);
     });
 
-    // ✅ commanditaire = utilisateur connecté
-    formData.append("commanditaire", user.id);
+    // ✅ si connecté : on garde le lien "commanditaire"
+    const user = pb.authStore?.record;
+    if (user?.id) {
+      formData.append("commanditaire", user.id);
+
+      // optionnel : si tu veux aussi remplir nom_externe automatiquement avec le nom du compte
+      // (tu peux supprimer ces 2 lignes si tu veux laisser vide côté connecté)
+      if (!nomExterne.value.trim()) {
+        formData.append("nom_externe", (user.name || user.username || "").trim());
+      } else {
+        formData.append("nom_externe", nomExterne.value.trim());
+      }
+    } else {
+      // ✅ pas connecté : uniquement nom_externe
+      formData.append("nom_externe", nomExterne.value.trim());
+    }
 
     if (imageMarqueFile.value instanceof File) {
       formData.append("image_marque", imageMarqueFile.value);
@@ -146,30 +146,8 @@ const submit = async () => {
   <div class="min-h-screen bg-[#151A24] text-white">
     <AppHeader />
 
-    <!-- ✅ SI NON CONNECTÉ OU PAS AUTORISÉ -->
-    <div
-      v-if="!isLoggedIn || !canPropose"
-      class="min-h-[calc(100vh-80px)] flex items-center justify-center px-6 py-10"
-    >
-      <div class="max-w-xl w-full text-center bg-white/5 border border-white/10 rounded-3xl p-8 sm:p-10">
-        <h1 class="text-3xl font-extrabold mb-3">Accès restreint</h1>
-
-        <p v-if="!isLoggedIn" class="text-white/70">
-          Vous devez être connecté pour proposer un sujet.
-        </p>
-
-        <p v-else class="text-white/70">
-          Vous n’avez pas les droits pour proposer un sujet.
-          <span class="block mt-2 text-white/50 text-sm">
-            (Accès réservé aux comptes <span class="text-[#CCFFBC] font-semibold">prof</span> ou
-            <span class="text-[#CCFFBC] font-semibold">admin</span>)
-          </span>
-        </p>
-      </div>
-    </div>
-
-    <!-- ✅ FORMULAIRE SI AUTORISÉ -->
-    <div v-else class="px-4 sm:px-6 py-10">
+    <!-- ✅ FORMULAIRE OUVERT À TOUS -->
+    <div class="px-4 sm:px-6 py-10">
       <!-- wrapper centré -->
       <div class="max-w-4xl mx-auto">
         <!-- card -->
@@ -178,13 +156,16 @@ const submit = async () => {
           <div class="text-center">
             <h1 class="text-3xl sm:text-4xl font-extrabold mb-3">Proposer un projet</h1>
             <p class="text-white/70 max-w-2xl mx-auto">
-              Proposez vos projets ici, votre proposition sera examinée par un administrateur et
-              ajoutée à la liste des sujets s’il correspond aux attendus de MMI.
+              Proposez un sujet de projet. Il sera examiné par un administrateur et ajouté à la liste des sujets s’il
+              correspond aux attendus de MMI.
             </p>
 
             <p v-if="authUser" class="text-white/60 mt-6">
               Connecté en tant que
               <span class="text-[#CCFFBC] font-semibold">{{ authUser.name || authUser.username }}</span>
+            </p>
+            <p v-else class="text-white/50 mt-6 text-sm">
+              Vous pouvez proposer un sujet sans compte. Indiquez simplement votre nom / entreprise.
             </p>
           </div>
 
@@ -196,6 +177,20 @@ const submit = async () => {
 
           <!-- Form -->
           <form class="mt-6 space-y-7" @submit.prevent="submit">
+            <!-- ✅ Nom externe (affiché si pas connecté, mais tu peux le laisser visible aussi) -->
+            <div v-if="!isLoggedIn">
+              <label class="block mb-2 text-white/80">Nom / Entreprise*</label>
+              <input
+                v-model="nomExterne"
+                type="text"
+                placeholder="Ex: Entreprise ABC / Jean Dupont"
+                class="w-full bg-[#151A24]/60 border border-white/15 rounded-xl px-4 py-3 outline-none focus:border-[#CCFFBC] transition"
+              />
+              <p class="text-white/50 text-sm mt-2">
+                Ce champ remplace l’identification par compte lorsqu’on n’est pas connecté.
+              </p>
+            </div>
+
             <!-- Ligne 2 colonnes sur desktop -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <!-- Nom du projet -->
@@ -299,9 +294,7 @@ const submit = async () => {
                 <label
                   class="bg-[#151A24]/60 p-5 rounded-2xl flex flex-col items-center gap-2 border border-white/15 cursor-pointer hover:border-white/40 transition"
                 >
-                  <div class="w-11 h-11 rounded-xl bg-[#CCFFBC]/20 flex items-center justify-center">
-                    📷
-                  </div>
+                  <div class="w-11 h-11 rounded-xl bg-[#CCFFBC]/20 flex items-center justify-center">📷</div>
                   <span class="text-sm text-white/80">Image de marque</span>
                   <span class="text-xs text-white/60">
                     {{ imageMarqueFile ? imageMarqueFile.name : "Aucun fichier" }}
@@ -313,9 +306,7 @@ const submit = async () => {
                 <label
                   class="bg-[#151A24]/60 p-5 rounded-2xl flex flex-col items-center gap-2 border border-white/15 cursor-pointer hover:border-white/40 transition"
                 >
-                  <div class="w-11 h-11 rounded-xl bg-[#CCFFBC]/20 flex items-center justify-center">
-                    📄
-                  </div>
+                  <div class="w-11 h-11 rounded-xl bg-[#CCFFBC]/20 flex items-center justify-center">📄</div>
                   <span class="text-sm text-white/80">Sujet (PDF)</span>
                   <span class="text-xs text-white/60">
                     {{ sujetPdfFile ? sujetPdfFile.name : "Aucun fichier" }}
@@ -349,4 +340,3 @@ const submit = async () => {
     </div>
   </div>
 </template>
-

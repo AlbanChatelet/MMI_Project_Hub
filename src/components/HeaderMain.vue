@@ -16,6 +16,14 @@
 
         <!-- ✅ Desktop -->
         <div class="hidden md:flex items-center gap-8 lg:gap-12 ml-auto">
+          <!-- ✅ Nouveau bouton à gauche de Galerie -->
+          <RouterLink
+            to="/proposer_projet"
+            class="text-sm font-medium text-[#CCFFBC] transition-colors hover:text-white"
+          >
+            Proposer un sujet
+          </RouterLink>
+
           <RouterLink
             to="/galerie"
             class="text-sm font-medium text-[#CCFFBC] transition-colors hover:text-white"
@@ -67,6 +75,15 @@
           v-if="isMenuOpen"
           class="md:hidden bg-[#191F2B] rounded-b-2xl border-t border-white/10 px-4 py-3 flex flex-col gap-3"
         >
+          <!-- ✅ Nouveau lien dans le menu mobile -->
+          <RouterLink
+            to="/proposer_projet"
+            @click="isMenuOpen = false"
+            class="text-[#CCFFBC] text-lg font-medium"
+          >
+            Proposer un sujet
+          </RouterLink>
+
           <RouterLink
             to="/galerie"
             @click="isMenuOpen = false"
