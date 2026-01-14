@@ -33,17 +33,15 @@ const dashboardRoute = computed(() => {
   const u = authUser.value;
   const t = String(u?.type_utilisateur || u?.role || u?.type || "").toLowerCase();
 
-  if (t === "admin") {
-    return "/admin-dashboard";
-  }
-
-  if (t === "prof" || t === "enseignant") {
-    return "/enseignant-dashboard";
-  }
-
+  if (t === "admin") return "/admin-dashboard";
+  if (t === "prof" || t === "enseignant") return "/enseignant-dashboard";
   return "/eleve-dashboard";
 });
 
+// ✅ Route "Mon espace" : si pas connecté => /login
+const espaceRoute = computed(() => {
+  return isAuthenticated.value ? dashboardRoute.value : "/login";
+});
 
 // Initiale fallback
 const displayInitial = computed(() => {
@@ -99,16 +97,15 @@ const avatarUrl = computed(() => {
           </svg>
         </button>
 
-        <!-- ✅ AVATAR -->
+        <!-- ✅ AVATAR : si connecté => dashboard, sinon => /login -->
         <RouterLink
-          v-if="isAuthenticated"
-          :to="dashboardRoute"
+          :to="espaceRoute"
           class="w-11 h-11 rounded-full overflow-hidden border border-white/10 bg-white/5 grid place-items-center hover:opacity-90 transition"
-          aria-label="Aller au dashboard"
-          title="Mon dashboard"
+          aria-label="Mon espace"
+          title="Mon espace"
         >
           <img
-            v-if="avatarUrl"
+            v-if="isAuthenticated && avatarUrl"
             :src="avatarUrl"
             alt="Avatar"
             class="w-full h-full object-cover"
@@ -142,9 +139,11 @@ const avatarUrl = computed(() => {
             </div>
 
             <nav class="mt-12 flex flex-col gap-10 text-2xl font-extrabold">
-              <RouterLink :to="dashboardRoute" @click="close">
+              <!-- ✅ Mon espace : si pas connecté => /login -->
+              <RouterLink :to="espaceRoute" @click="close">
                 Mon espace
               </RouterLink>
+
               <RouterLink to="/galerie" @click="close">
                 Galerie
               </RouterLink>
