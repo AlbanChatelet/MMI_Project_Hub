@@ -117,8 +117,8 @@ onMounted(async () => {
               v-if="getGroupeMembres(projet.id).length"
               class="text-xs mt-3 leading-snug flex items-start gap-2"
             >
-              <UserIcon class="mt-[2px] shrink-0" />
-              <span>
+              <UserIcon class=" shrink-0" />
+              <span class="pt-2">
                 {{ formatMembres(projet.id, 3) }}
               </span>
             </p>
