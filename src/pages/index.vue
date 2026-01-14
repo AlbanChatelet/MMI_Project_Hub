@@ -1,6 +1,6 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { pb } from "../pb";
 import HeaderMain from "../components/HeaderMain.vue";
 
@@ -8,6 +8,9 @@ const projets = ref([]);
 const groupes = ref([]);
 const loading = ref(true);
 const error = ref(null);
+
+// 🔹 seulement les 4 premiers projets
+const projetsLimites = computed(() => projets.value.slice(0, 4));
 
 // Trouve le groupe associé à un projet
 const getGroupeByProjetId = (projetId) => {
@@ -23,12 +26,10 @@ const getGroupeNom = (projetId) => {
   return groupe?.nom || null;
 };
 
-// Retourne la liste des membres (users) du groupe lié au projet
 const getGroupeMembres = (projetId) => {
   const groupe = getGroupeByProjetId(projetId);
   const membres = groupe?.expand?.membres;
-  if (!Array.isArray(membres)) return [];
-  return membres;
+  return Array.isArray(membres) ? membres : [];
 };
 
 const formatMembres = (projetId) => {
@@ -56,12 +57,11 @@ onMounted(async () => {
 </script>
 
 <template>
-  <!-- Wrapper global avec fond -->
-  <div class="w-full h-screen overflow-hidden bg-black relative">
-    <!-- Header flottant -->
+  <!-- Wrapper global -->
+  <div class="w-full h-screen bg-black relative overflow-y-auto md:overflow-hidden">
+    <!-- Header -->
     <HeaderMain />
 
-    <!-- Grille plein écran -->
     <main class="w-full h-full">
       <!-- Loading -->
       <p v-if="loading" class="text-white text-center mt-10 text-xl">
@@ -73,16 +73,16 @@ onMounted(async () => {
         {{ error }}
       </p>
 
-      <!-- Grille 1x4 -->
+      <!-- Grille -->
       <div
         v-else
-        class="grid grid-cols-1 md:grid-cols-4 grid-rows-1 w-full h-full"
+        class="grid grid-cols-1 md:grid-cols-4 w-full h-auto md:h-full"
       >
         <RouterLink
-          v-for="projet in projets"
+          v-for="projet in projetsLimites"
           :key="projet.id"
           :to="`/projets/${projet.id}`"
-          class="relative group overflow-hidden h-full"
+          class="relative group overflow-hidden h-screen md:h-full"
         >
           <!-- Image -->
           <img
@@ -99,14 +99,12 @@ onMounted(async () => {
             Aucun aperçu
           </div>
 
-          <!-- Overlay sombre -->
-          <div
-            class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"
-          ></div>
+          <!-- Overlay -->
+          <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
 
-          <!-- Contenu en bas -->
-          <div class="absolute bottom-0 left-0 right-0 p-4">
-            <h3 class="text-white text-2xl font-bold drop-shadow-lg">
+          <!-- Contenu -->
+          <div class="absolute bottom-0 left-0 right-0 p-6">
+            <h3 class="text-white text-3xl font-bold drop-shadow-lg">
               {{ projet.titre }}
             </h3>
 
