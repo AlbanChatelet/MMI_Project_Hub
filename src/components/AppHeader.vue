@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed } from "vue";
+import { pb } from "../pb"; // adapte le chemin si besoin
 
 const props = defineProps({
   variant: {
@@ -21,6 +22,26 @@ onMounted(() => window.addEventListener("keydown", onKeydown));
 onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
 
 const isTransparent = computed(() => props.variant === "transparent");
+
+// ✅ Auth
+const isAuthenticated = computed(() => pb.authStore?.isValid);
+const authUser = computed(() => pb.authStore?.model || null);
+
+const displayInitial = computed(() => {
+  const u = authUser.value;
+  const name = u?.name || u?.username || u?.email || "";
+  return name ? String(name).trim().charAt(0).toUpperCase() : "U";
+});
+
+const avatarUrl = computed(() => {
+  const u = authUser.value;
+  if (!u?.avatar) return null;
+  try {
+    return pb.files.getURL(u, u.avatar);
+  } catch {
+    return null;
+  }
+});
 </script>
 
 <template>
@@ -42,28 +63,46 @@ const isTransparent = computed(() => props.variant === "transparent");
         />
       </RouterLink>
 
-      <!-- BURGER -->
-      <button
-        type="button"
-        class="text-[#CFFFBC] hover:opacity-80 transition p-2"
-        @click="toggle"
-        aria-label="Ouvrir le menu"
-      >
-        <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
-          <path d="M4 7h16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
-          <path d="M4 12h16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
-          <path d="M4 17h16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
-        </svg>
-      </button>
+      <!-- RIGHT ACTIONS -->
+      <div class="flex items-center gap-3">
+        <!-- BURGER -->
+        <button
+          type="button"
+          class="text-[#CFFFBC] hover:opacity-80 transition p-2"
+          @click="toggle"
+          aria-label="Ouvrir le menu"
+        >
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
+            <path d="M4 7h16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+            <path d="M4 12h16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+            <path d="M4 17h16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+          </svg>
+        </button>
+
+        <!-- ✅ AVATAR (à droite du burger) -->
+        <RouterLink
+          v-if="isAuthenticated"
+          to="/eleve-dashboard"
+          class="w-11 h-11 rounded-full overflow-hidden border border-white/10 bg-white/5 grid place-items-center hover:opacity-90 transition"
+          aria-label="Aller au dashboard"
+          title="Mon dashboard"
+        >
+          <img
+            v-if="avatarUrl"
+            :src="avatarUrl"
+            alt="Avatar"
+            class="w-full h-full object-cover"
+          />
+          <span v-else class="text-sm font-extrabold text-[#CFFFBC]">
+            {{ displayInitial }}
+          </span>
+        </RouterLink>
+      </div>
     </div>
 
     <!-- OVERLAY -->
     <transition name="fade">
-      <div
-        v-if="isOpen"
-        class="fixed inset-0 z-50 bg-black/60"
-        @click.self="close"
-      >
+      <div v-if="isOpen" class="fixed inset-0 z-50 bg-black/60" @click.self="close">
         <!-- PANEL -->
         <transition name="slide">
           <aside
@@ -93,9 +132,6 @@ const isTransparent = computed(() => props.variant === "transparent");
       </div>
     </transition>
   </header>
-
-  <!-- spacer si header fixed (pour pas que le contenu passe sous le header) -->
-  
 </template>
 
 <style scoped>

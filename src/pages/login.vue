@@ -1,29 +1,61 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
-  <div class="flex h-screen">
-    <!-- Section soumettre un projet (1/3 de l'écran) -->
-    <div class="w-1/3 bg-gray-bg bg-cover bg-center flex flex-col justify-center items-center p-8">
-      <h2 class="text-2xl text-white font-bold mb-4 text-center">Vous êtes une entreprise :</h2>
-      <p class="mb-6 text-white text-center">
+  <!-- LOGO DESKTOP -->
+  <RouterLink
+    to="/"
+    class="hidden md:flex fixed top-4 left-4 z-50 items-center gap-2"
+  >
+    <MyLogo class="w-48 drop-shadow-xl" />
+  </RouterLink>
+
+  <div class="flex flex-col md:flex-row min-h-screen">
+    <!-- Section soumettre un projet -->
+    <div
+      class="w-full md:w-1/3 bg-gray-bg bg-cover bg-center flex flex-col justify-center items-center p-6 sm:p-8"
+    >
+      <!-- LOGO MOBILE -->
+      <RouterLink
+        to="/"
+        class="md:hidden mb-8"
+      >
+        <MyLogo class="w-32 mx-auto drop-shadow-xl" />
+      </RouterLink>
+
+      <h2 class="text-xl sm:text-2xl text-white font-bold mb-3 sm:mb-4 text-center">
+        Vous êtes une entreprise :
+      </h2>
+
+      <p class="mb-5 sm:mb-6 text-white text-center text-sm sm:text-base max-w-md">
         Soumettez une proposition de projet que nous étudierons et proposerons aux étudiants
       </p>
+
       <a
         href="/proposer_projet"
-        class="block w-full bg-[#CCFFBC] text-black p-3 rounded-lg text-center hover:bg-[#B8E6A8] transition"
+        class="block w-full max-w-md bg-[#CCFFBC] text-black p-3 rounded-lg text-center hover:bg-[#B8E6A8] transition"
       >
         Soumettre un projet
       </a>
     </div>
 
-    <!-- Section connexion (2/3 de l'écran) -->
-    <div class="w-2/3 bg-[#1A1D29] flex flex-col justify-center items-center p-12">
-      <h2 class="text-4xl text-white font-bold mb-12 pb-12">
+    <!-- Section connexion -->
+    <div
+      class="w-full md:w-2/3 bg-[#1A1D29] flex flex-col justify-center items-center p-6 sm:p-10 md:p-12"
+    >
+      <h2
+        class="text-2xl sm:text-3xl md:text-4xl text-white font-bold mb-6 sm:mb-10 md:mb-12 text-center max-w-2xl"
+      >
         Application de gestion des projets de MMI Montbéliard
       </h2>
-      <h3 class="text-3xl text-white font-bold mb-6">Vous êtes étudiant ou enseignant ?</h3>
+
+      <h3 class="text-xl sm:text-2xl md:text-3xl text-white font-bold mb-4 sm:mb-6 text-center">
+        Vous êtes étudiant ou enseignant ?
+      </h3>
 
       <!-- Formulaire -->
-      <form class="w-2/3 space-y-4" @submit.prevent="login">
+      <form
+        class="w-full max-w-md md:max-w-xl md:w-2/3 space-y-4"
+        @submit.prevent="login"
+      >
         <input
           type="email"
           placeholder="Adresse email"
@@ -38,32 +70,50 @@
           class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
         />
 
-        <div class="flex items-center justify-between">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <label class="flex items-center space-x-2">
             <input type="checkbox" class="form-checkbox h-4 w-4 text-[#A3CC94]" />
-            <span class="text-white">Se souvenir de moi</span>
+            <span class="text-white text-sm sm:text-base">Se souvenir de moi</span>
           </label>
-          <a href="#" class="text-[#A3CC94] hover:underline text-sm">Mot de passe oublié ?</a>
+
+          <a href="#" class="text-[#A3CC94] hover:underline text-sm">
+            Mot de passe oublié ?
+          </a>
         </div>
 
-        <!-- ERREUR -->
-        <p v-if="errorMessage" class="text-red-400 text-sm">{{ errorMessage }}</p>
+        <p v-if="errorMessage" class="text-red-400 text-sm">
+          {{ errorMessage }}
+        </p>
 
         <button
-          type="submit"
-          class="w-full bg-[#CCFFBC] text-black p-3 rounded-lg hover:bg-[#B8E6A8] transition"
-        >
-          Se connecter
-        </button>
+  type="submit"
+  class="w-full bg-[#CCFFBC] text-black p-3 rounded-lg hover:bg-[#B8E6A8] transition"
+>
+  Se connecter
+</button>
+
+<!-- INSCRIPTION -->
+<p class="text-center text-sm text-white/70">
+  Pas de compte ?
+  <RouterLink
+    to="/register"
+    class="text-[#CCFFBC] font-medium hover:underline"
+  >
+    Créer un compte
+  </RouterLink>
+</p>
+
       </form>
     </div>
   </div>
 </template>
 
+
 <script setup lang="ts">
+import MyLogo from "../components/icons/MyLogo.vue";
 import { ref } from "vue";
-import { useRouter } from "vue-router";
-import { pb } from "../pb"; // ✅ utilise la même instance !
+import { useRouter, RouterLink } from "vue-router";
+import { pb } from "../pb";
 
 const router = useRouter();
 

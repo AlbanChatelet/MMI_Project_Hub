@@ -2,7 +2,9 @@
 import AppHeader from '@/components/AppHeader.vue'
 import { ref, onMounted, computed } from "vue";
 import { pb } from "../pb";
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router';
+
+const router = useRouter();
 
 const user = ref(pb.authStore.model);
 const promotion = ref(null);
@@ -12,14 +14,21 @@ const promotionsById = ref({});
 const loading = ref(true);
 const error = ref(null);
 
+// ✅ DÉCONNEXION
+const logout = () => {
+  pb.authStore.clear();
+  user.value = null;
+  router.push("/login"); // adapte si besoin
+};
+
 // --- LOGIQUE MODALE D'ÉDITION ---
 const isEditModalOpen = ref(false);
 const isUpdating = ref(false);
 const editForm = ref({
   name: "",
   username: "",
-  avatar: null,        // ✅ nouveau
-  avatarPreview: null, // ✅ nouveau
+  avatar: null,
+  avatarPreview: null,
 });
 
 const openEditModal = () => {
@@ -32,12 +41,10 @@ const openEditModal = () => {
   isEditModalOpen.value = true;
 };
 
-// ✅ Gestion input file avatar
 const onAvatarChange = (e) => {
   const file = e?.target?.files?.[0] || null;
   editForm.value.avatar = file;
 
-  // preview (optionnel mais pratique)
   if (editForm.value.avatarPreview) {
     URL.revokeObjectURL(editForm.value.avatarPreview);
     editForm.value.avatarPreview = null;
@@ -47,7 +54,6 @@ const onAvatarChange = (e) => {
   }
 };
 
-// (optionnel) nettoyer l’URL de preview quand on ferme
 const closeEditModal = () => {
   if (editForm.value.avatarPreview) {
     URL.revokeObjectURL(editForm.value.avatarPreview);
@@ -58,17 +64,15 @@ const closeEditModal = () => {
 const handleUpdateProfile = async () => {
   isUpdating.value = true;
   try {
-    // ✅ Si avatar sélectionné => FormData obligatoire
     if (editForm.value.avatar) {
       const fd = new FormData();
       fd.append("name", editForm.value.name);
       fd.append("username", editForm.value.username);
-      fd.append("avatar", editForm.value.avatar); // ✅ champ PB: avatar
+      fd.append("avatar", editForm.value.avatar);
 
       const record = await pb.collection("users").update(user.value.id, fd);
       user.value = record;
     } else {
-      // ✅ Sinon update normal
       const record = await pb.collection("users").update(user.value.id, {
         name: editForm.value.name,
         username: editForm.value.username,
@@ -76,9 +80,7 @@ const handleUpdateProfile = async () => {
       user.value = record;
     }
 
-    // ✅ refresh authStore (utile si tu utilises pb.authStore.model ailleurs)
     pb.authStore.save(pb.authStore.token, user.value);
-
     closeEditModal();
   } catch (e) {
     console.error(e);
@@ -115,7 +117,6 @@ const avatarUrl = computed(() => {
   return pb.files.getURL(user.value, user.value.avatar);
 });
 
-// ✅ preview dans la modale (priorité au nouveau fichier si choisi)
 const avatarPreviewUrl = computed(() => {
   return editForm.value.avatarPreview || avatarUrl.value || null;
 });
@@ -180,10 +181,12 @@ const projetsDuUser = computed(() => {
   for (const g of groupes.value) {
     const p = g?.expand?.projet;
     if (!p?.id) continue;
+
     const promoRel = Array.isArray(p.promo) ? p.promo : p.promo ? [p.promo] : [];
     const yearsSet = new Set();
     const tracksSet = new Set();
     const rawPromo = [];
+
     for (const promoId of promoRel) {
       const pr = promotionsById.value[promoId];
       if (!pr) continue;
@@ -193,12 +196,14 @@ const projetsDuUser = computed(() => {
       if (t) tracksSet.add(t);
       rawPromo.push({ annee: a, parcours: t });
     }
+
     const payload = {
       projet: p,
       years: Array.from(yearsSet).sort(),
       tracks: Array.from(tracksSet),
       rawPromo,
     };
+
     if (!map.has(p.id)) map.set(p.id, payload);
     else {
       const ex = map.get(p.id);
@@ -215,6 +220,7 @@ const projetsFiltres = computed(() => {
   const annee = selectedAnnee.value || "";
   const parcours = selectedParcours.value || "";
   if (!annee && !parcours) return projetsDuUser.value;
+
   return projetsDuUser.value.filter((item) =>
     item.rawPromo.some((rp) => {
       const okA = annee ? rp.annee === annee : true;
@@ -228,6 +234,7 @@ const yearBadge = (y) => anneeLabelText(y);
 const trackBadge = (t) => parcoursLabel(t);
 const displayName = computed(() => user.value?.name || user.value?.username || "Utilisateur");
 </script>
+
 
 
 <template>
@@ -244,7 +251,6 @@ const displayName = computed(() => user.value?.name || user.value?.username || "
             <img
               v-if="avatarUrl"
               :src="avatarUrl"
-              alt="Avatar"
               class="w-24 h-24 rounded-full object-cover border border-white/10"
             />
             <div
@@ -256,21 +262,29 @@ const displayName = computed(() => user.value?.name || user.value?.username || "
 
             <button
               @click="openEditModal"
-              class="absolute -top-1 -left-1 w-9 h-9 rounded-full bg-[#CFFFBC] text-black flex items-center justify-center shadow hover:scale-110 transition-transform active:scale-95"
-              type="button"
-              title="Modifier le profil"
+              class="absolute -top-1 -left-1 w-9 h-9 rounded-full bg-[#CFFFBC] text-black flex items-center justify-center shadow"
             >
-              <span class="text-xl">✎</span>
+              ✎
             </button>
           </div>
 
-          <div class="flex-1">
-            <h1 class="text-4xl font-extrabold tracking-tight text-white/80">
-              {{ displayName }}
-            </h1>
-            <p class="text-white/60 mt-1">
-              {{ promotionLabel || "Promotion non renseignée" }}
-            </p>
+          <div class="flex-1 flex items-start justify-between gap-4">
+            <div>
+              <h1 class="text-4xl font-extrabold text-white/80">
+                {{ displayName }}
+              </h1>
+              <p class="text-white/60 mt-1">
+                {{ promotionLabel || "Promotion non renseignée" }}
+              </p>
+            </div>
+
+            <!-- ✅ BOUTON DÉCONNEXION -->
+            <button
+              @click="logout"
+              class="px-5 py-2 rounded-full bg-white/5 border border-white/10 text-white/80 hover:bg-white/10 transition"
+            >
+              Se déconnecter
+            </button>
           </div>
         </div>
 
