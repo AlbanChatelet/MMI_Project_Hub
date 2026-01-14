@@ -121,26 +121,51 @@ const email = ref("");
 const password = ref("");
 const errorMessage = ref("");
 
+const normalizeRole = (r: unknown) =>
+  String(r || "")
+    .trim()
+    .toLowerCase();
+
+const redirectToDashboardByRole = (roleRaw: unknown) => {
+  const role = normalizeRole(roleRaw);
+
+  // adapte ici si tes valeurs exactes sont différentes dans PB
+  if (role === "etudiant" || role === "élève" || role === "eleve") {
+    router.push("/eleve-dashboard");
+    return;
+  }
+
+  if (role === "prof" || role === "enseignant" || role === "teacher") {
+    router.push("/enseignant-dashboard");
+    return;
+  }
+
+  if (role === "admin" || role === "administrateur") {
+    router.push("/admin-dashboard");
+    return;
+  }
+
+  // fallback safe
+  router.push("/eleve-dashboard");
+};
+
 const login = async () => {
   errorMessage.value = "";
 
   try {
-    const auth = await pb
-      .collection("users")
-      .authWithPassword(email.value, password.value);
+    await pb.collection("users").authWithPassword(email.value, password.value);
 
-    const role = auth.record.role;
+    // ✅ source la plus fiable après login
+    const role = (pb.authStore.model as any)?.role;
 
-    if (role === "etudiant") router.push("/eleve-dashboard");
-    else if (role === "prof") router.push("/enseignant-dashboard");
-    
-    else router.push("/admin-dashboard");
+    redirectToDashboardByRole(role);
   } catch (e) {
     errorMessage.value = "Email ou mot de passe incorrect.";
     console.error("Erreur connexion :", e);
   }
 };
 </script>
+
 
 <style>
 .cover {
