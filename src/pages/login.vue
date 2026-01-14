@@ -142,5 +142,7 @@ const login = async () => {
 </script>
 
 <style>
-/* Aucun style additionnel nécessaire grâce à TailwindCSS */
+.cover {
+  background-image: url('../assets/bg_img_gray.png');
+}
 </style>

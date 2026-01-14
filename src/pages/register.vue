@@ -331,4 +331,8 @@ async function register() {
   @apply w-full p-3 rounded-lg bg-white border border-gray-300;
   @apply focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-60 disabled:cursor-not-allowed;
 }
+
+.cover {
+  background-image: url('../assets/bg_img_gray.png');
+}
 </style>
