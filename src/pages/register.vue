@@ -333,6 +333,6 @@ async function register() {
 }
 
 .cover {
-  background-image: url('../assets/bg_img_gray.png');
+  background-image: #3D3F4A
 }
 </style>
