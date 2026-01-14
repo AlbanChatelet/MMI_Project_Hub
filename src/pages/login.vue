@@ -86,28 +86,26 @@
         </p>
 
         <button
-  type="submit"
-  class="w-full bg-[#CCFFBC] text-black p-3 rounded-lg hover:bg-[#B8E6A8] transition"
->
-  Se connecter
-</button>
+          type="submit"
+          class="w-full bg-[#CCFFBC] text-black p-3 rounded-lg hover:bg-[#B8E6A8] transition"
+        >
+          Se connecter
+        </button>
 
-<!-- INSCRIPTION -->
-<p class="text-center text-sm text-white/70">
-  Pas de compte ?
-  <RouterLink
-    to="/register"
-    class="text-[#CCFFBC] font-medium hover:underline"
-  >
-    Créer un compte
-  </RouterLink>
-</p>
-
+        <!-- INSCRIPTION -->
+        <p class="text-center text-sm text-white/70">
+          Pas de compte ?
+          <RouterLink
+            to="/register"
+            class="text-[#CCFFBC] font-medium hover:underline"
+          >
+            Créer un compte
+          </RouterLink>
+        </p>
       </form>
     </div>
   </div>
 </template>
-
 
 <script setup lang="ts">
 import MyLogo from "../components/icons/MyLogo.vue";
@@ -121,31 +119,32 @@ const email = ref("");
 const password = ref("");
 const errorMessage = ref("");
 
-const normalizeRole = (r: unknown) =>
-  String(r || "")
+const normalizeTypeUtilisateur = (r: unknown) =>
+  String(r ?? "")
     .trim()
     .toLowerCase();
 
-const redirectToDashboardByRole = (roleRaw: unknown) => {
-  const role = normalizeRole(roleRaw);
+const redirectToDashboardByTypeUtilisateur = (typeUtilisateurRaw: unknown) => {
+  const typeUtilisateur = normalizeTypeUtilisateur(typeUtilisateurRaw);
 
-  // adapte ici si tes valeurs exactes sont différentes dans PB
-  if (role === "etudiant" || role === "élève" || role === "eleve") {
-    router.push("/eleve-dashboard");
-    return;
-  }
-
-  if (role === "prof" || role === "enseignant" || role === "teacher") {
-    router.push("/enseignant-dashboard");
-    return;
-  }
-
-  if (role === "admin" || role === "administrateur") {
+  // ✅ PocketBase: type_utilisateur = admin | prof | etudiant
+  if (typeUtilisateur === "admin" || typeUtilisateur === "administrateur") {
     router.push("/admin-dashboard");
     return;
   }
 
-  // fallback safe
+  // ✅ on accepte plusieurs variantes possibles
+  if (["prof", "enseignant", "teacher", "professeur"].includes(typeUtilisateur)) {
+    router.push("/enseignant-dashboard");
+    return;
+  }
+
+  if (["etudiant", "étudiant", "eleve", "élève"].includes(typeUtilisateur)) {
+    router.push("/eleve-dashboard");
+    return;
+  }
+
+  // ✅ fallback safe (si vide/inconnu)
   router.push("/eleve-dashboard");
 };
 
@@ -155,10 +154,17 @@ const login = async () => {
   try {
     await pb.collection("users").authWithPassword(email.value, password.value);
 
-    // ✅ source la plus fiable après login
-    const role = (pb.authStore.model as any)?.role;
+    // ✅ après login, la donnée fiable est dans authStore.record (ou model selon version)
+    const auth = (pb.authStore.record || pb.authStore.model) as any;
 
-    redirectToDashboardByRole(role);
+    // ✅ debug : tu peux supprimer après
+    console.log("AUTH USER =", auth);
+    console.log("type_utilisateur =", auth?.type_utilisateur);
+
+    // ✅ LE BON CHAMP
+    const typeUtilisateur = auth?.type_utilisateur;
+
+    redirectToDashboardByTypeUtilisateur(typeUtilisateur);
   } catch (e) {
     errorMessage.value = "Email ou mot de passe incorrect.";
     console.error("Erreur connexion :", e);
@@ -169,6 +175,6 @@ const login = async () => {
 
 <style>
 .cover {
-  background-image: #3D3F4A
+  background-image: #3D3F4A;
 }
 </style>

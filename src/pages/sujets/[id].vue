@@ -744,7 +744,7 @@ onMounted(async () => {
           <div class="flex items-start justify-between gap-4">
             <div>
               <h2 class="text-3xl font-extrabold text-[#CFFFBC]">Demander ce projet</h2>
-              <p class="text-white/70 mt-1 text-sm">Crée un groupe sur PocketBase avec le nom du sujet.</p>
+              
             </div>
 
             <button
@@ -858,7 +858,7 @@ onMounted(async () => {
           </button>
 
           <p class="mt-3 text-xs text-white/50">
-            Si ça échoue, vérifie les <b>API Rules</b> de la collection <b>Groupe</b> (Create rule) et <b>users</b> (List rule).
+            N'oubliez pas de vous <b>ajouter</b> vous-même pour <b>appartenir au groupe</b> du <b>projet</b>
           </p>
         </div>
       </div>
