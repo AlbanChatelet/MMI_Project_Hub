@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed } from "vue";
-import { pb } from "../pb"; // adapte le chemin si besoin
+import { pb } from "../pb";
+import { RouterLink } from "vue-router";
 
 const props = defineProps({
   variant: {
@@ -27,12 +28,25 @@ const isTransparent = computed(() => props.variant === "transparent");
 const isAuthenticated = computed(() => pb.authStore?.isValid);
 const authUser = computed(() => pb.authStore?.model || null);
 
+// ✅ Route dashboard selon le type d’utilisateur
+const dashboardRoute = computed(() => {
+  const u = authUser.value;
+  const t = String(u?.type_utilisateur || u?.role || u?.type || "").toLowerCase();
+
+  if (t === "prof" || t === "enseignant" || t === "admin") {
+    return "/enseignant-dashboard";
+  }
+  return "/eleve-dashboard";
+});
+
+// Initiale fallback
 const displayInitial = computed(() => {
   const u = authUser.value;
   const name = u?.name || u?.username || u?.email || "";
   return name ? String(name).trim().charAt(0).toUpperCase() : "U";
 });
 
+// Avatar
 const avatarUrl = computed(() => {
   const u = authUser.value;
   if (!u?.avatar) return null;
@@ -79,10 +93,10 @@ const avatarUrl = computed(() => {
           </svg>
         </button>
 
-        <!-- ✅ AVATAR (à droite du burger) -->
+        <!-- ✅ AVATAR -->
         <RouterLink
           v-if="isAuthenticated"
-          to="/eleve-dashboard"
+          :to="dashboardRoute"
           class="w-11 h-11 rounded-full overflow-hidden border border-white/10 bg-white/5 grid place-items-center hover:opacity-90 transition"
           aria-label="Aller au dashboard"
           title="Mon dashboard"
@@ -122,10 +136,18 @@ const avatarUrl = computed(() => {
             </div>
 
             <nav class="mt-12 flex flex-col gap-10 text-2xl font-extrabold">
-              <RouterLink to="/eleve-dashboard" @click="close">Mon espace</RouterLink>
-              <RouterLink to="/galerie" @click="close">Galerie</RouterLink>
-              <RouterLink to="/sujets" @click="close">Liste des sujets</RouterLink>
-              <RouterLink to="/proposer_projet" @click="close">Proposer un projet</RouterLink>
+              <RouterLink :to="dashboardRoute" @click="close">
+                Mon espace
+              </RouterLink>
+              <RouterLink to="/galerie" @click="close">
+                Galerie
+              </RouterLink>
+              <RouterLink to="/sujets" @click="close">
+                Liste des sujets
+              </RouterLink>
+              <RouterLink to="/proposer_projet" @click="close">
+                Proposer un projet
+              </RouterLink>
             </nav>
           </aside>
         </transition>
