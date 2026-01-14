@@ -20,7 +20,20 @@ const mail = ref("");
 const nomExterne = ref("");
 
 // compétences (select multiple)
-const competencesOptions = ["SEO", "Design", "Développement", "W"];
+const competencesOptions = [
+  "SEO",
+  "Design",
+  "Développement",
+  "Wordpress",
+  "Photoshop",
+  "Figma",
+  "Montage vidéo",
+  "Unreal Engine",
+  "Marketing",
+  "Réseaux sociaux",
+  "Gestion de projet",
+];
+
 const competences = ref([]);
 
 // files
