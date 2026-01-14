@@ -132,8 +132,9 @@ const login = async () => {
     const role = auth.record.role;
 
     if (role === "admin") router.push("/admin-dashboard");
-    else if (role === "enseignant") router.push("/enseignant-dashboard");
-    else router.push("/eleve-dashboard");
+    else if (role === "prof") router.push("/enseignant-dashboard");
+    
+    else router.push("/admin-dashboard");
   } catch (e) {
     errorMessage.value = "Email ou mot de passe incorrect.";
     console.error("Erreur connexion :", e);
