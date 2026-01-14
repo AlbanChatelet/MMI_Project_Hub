@@ -1,6 +1,6 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <script setup>
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted } from "vue";
 import { pb } from "../pb";
 import HeaderMain from "../components/HeaderMain.vue";
 
@@ -8,9 +8,6 @@ const projets = ref([]);
 const groupes = ref([]);
 const loading = ref(true);
 const error = ref(null);
-
-// 🔹 seulement les 4 premiers projets
-const projetsLimites = computed(() => projets.value.slice(0, 4));
 
 // Trouve le groupe associé à un projet
 const getGroupeByProjetId = (projetId) => {
@@ -41,11 +38,15 @@ const formatMembres = (projetId) => {
 onMounted(async () => {
   try {
     const [projetsRes, groupesRes] = await Promise.all([
-      pb.collection("Projet").getFullList({ sort: "-created" }),
+      // ✅ UNIQUEMENT les projets favoris (max 4)
+      pb.collection("Projet").getList(1, 4, {
+        filter: "favoris = true",
+        sort: "-created",
+      }),
       pb.collection("Groupe").getFullList({ expand: "membres" }),
     ]);
 
-    projets.value = projetsRes;
+    projets.value = projetsRes.items;
     groupes.value = groupesRes;
   } catch (err) {
     console.error(err);
@@ -79,7 +80,7 @@ onMounted(async () => {
         class="grid grid-cols-1 md:grid-cols-4 w-full h-auto md:h-full"
       >
         <RouterLink
-          v-for="projet in projetsLimites"
+          v-for="projet in projets"
           :key="projet.id"
           :to="`/projets/${projet.id}`"
           class="relative group overflow-hidden h-screen md:h-full"
@@ -88,7 +89,8 @@ onMounted(async () => {
           <img
             v-if="projet.photo"
             :src="pb.files.getUrl(projet, projet.photo)"
-            class="absolute inset-0 w-full h-full object-cover transform group-hover:scale-110 transition duration-700"
+            class="absolute inset-0 w-full h-full object-cover
+                   transform group-hover:scale-110 transition duration-700"
             alt="Aperçu du projet"
           />
 
