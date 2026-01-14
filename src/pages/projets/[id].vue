@@ -20,13 +20,23 @@ const etapes = ref([]);
 // ✅ Livrables
 const livrables = ref([]);
 
+// ✅ Commentaires (prof uniquement pour créer)
+const commentaires = ref([]);
+const loadingCommentaires = ref(false);
+const commentaireError = ref("");
+const commentaireSuccess = ref("");
+
+const showAddCommentaire = ref(false);
+const creatingCommentaire = ref(false);
+const commentaireForm = ref({
+  contenu: "",
+});
+
 // id du projet depuis l’URL
 const id = computed(() => String(route.params.id || ""));
 
 /* ===========================
    ✅ Auth / droits
-   - Tout le monde peut consulter
-   - Edition uniquement si user connecté ET membre du groupe du projet
    =========================== */
 const authUser = computed(() => pb.authStore?.model || null);
 const authUserId = computed(() => authUser.value?.id || null);
@@ -39,8 +49,23 @@ const isMemberOfGroup = computed(() => {
   return Array.isArray(ids) ? ids.includes(uid) : false;
 });
 
-// droits d'édition
+// droits d'édition (groupe)
 const canEdit = computed(() => isMemberOfGroup.value);
+
+// ✅ droit commentaire = prof uniquement
+// Ton champ peut s'appeler role / type_utilisateur / statut / etc.
+// Ici on essaie plusieurs noms pour que ça marche direct.
+const isProf = computed(() => {
+  const u = authUser.value;
+  const raw =
+    u?.role ??
+    u?.type_utilisateur ??
+    u?.typeUtilisateur ??
+    u?.statut ??
+    u?.user_type ??
+    "";
+  return String(raw).toLowerCase() === "prof";
+});
 
 /* ===========================
    ✅ Helpers
@@ -88,6 +113,7 @@ const userAvatarUrl = (u) => {
   const file = u.avatar || u.photo || u.image;
   if (!file) return null;
   try {
+    // ✅ PocketBase : getUrl (pas getURL)
     return pb.files.getURL(u, file);
   } catch {
     return null;
@@ -102,15 +128,23 @@ const memberSubtitle = (u) => {
 };
 
 const heroImageUrl = computed(() => {
-  if (projet.value?.photo) return pb.files.getURL(projet.value, projet.value.photo);
-  if (sujet.value?.image_marque) return pb.files.getURL(sujet.value, sujet.value.image_marque);
-  if (projet.value?.apercu) return pb.files.getURL(projet.value, projet.value.apercu);
+  try {
+    if (projet.value?.photo) return pb.files.getURL(projet.value, projet.value.photo);
+    if (sujet.value?.image_marque) return pb.files.getURL(sujet.value, sujet.value.image_marque);
+    if (projet.value?.apercu) return pb.files.getURL(projet.value, projet.value.apercu);
+  } catch {
+    // ignore
+  }
   return null;
 });
 
 const sujetPdfUrl = computed(() => {
   if (!sujet.value?.sujet_pdf) return null;
-  return pb.files.getURL(sujet.value, sujet.value.sujet_pdf);
+  try {
+    return pb.files.getURL(sujet.value, sujet.value.sujet_pdf);
+  } catch {
+    return null;
+  }
 });
 
 const promoBadges = computed(() => {
@@ -129,6 +163,18 @@ const formatDateFr = (iso) => {
   if (!iso) return "";
   const d = new Date(iso);
   return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "long" });
+};
+
+const formatDateTimeFr = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleString("fr-FR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 };
 
 // Affiche les membres assignés même si expand ne marche pas
@@ -260,8 +306,8 @@ const etapeForm = ref({
   date_debut: "",
   date_fin: "",
   statut: "todo", // todo | en_cours | done
-  progress: 0, // optionnel (champ number "progress")
-  membres: [], // optionnel (champ relation multiple "membres")
+  progress: 0,
+  membres: [],
 });
 
 const reloadEtapes = async () => {
@@ -484,7 +530,107 @@ const createLivrable = async () => {
 };
 
 /* ===========================
-   ✅ Mounted : charger projet + groupe/membres + étapes + livrables
+   ✅ Commentaires : list + création (prof uniquement)
+   =========================== */
+const reloadCommentaires = async () => {
+  const projetId = id.value;
+  if (!projetId) return;
+
+  loadingCommentaires.value = true;
+  commentaireError.value = "";
+
+  try {
+    commentaires.value = await withTimeout(
+      pb.collection("Commentaire").getFullList({
+        filter: `id_projet = "${projetId}"`,
+        sort: "-created",
+        expand: "id_auteur",
+      }),
+      15000,
+      "Chargement commentaires"
+    );
+  } catch (err) {
+    console.error(err);
+    commentaireError.value =
+      err?.data?.message || err?.message || "Erreur lors du chargement des commentaires.";
+    commentaires.value = [];
+  } finally {
+    loadingCommentaires.value = false;
+  }
+};
+
+const openAddCommentaire = () => {
+  commentaireError.value = "";
+  commentaireSuccess.value = "";
+
+  if (!authUserId.value) {
+    commentaireError.value = "Vous devez être connecté pour commenter.";
+    return;
+  }
+  if (!isProf.value) {
+    commentaireError.value = "Seuls les professeurs peuvent laisser un commentaire.";
+    return;
+  }
+  showAddCommentaire.value = true;
+};
+
+const createCommentaire = async () => {
+  commentaireError.value = "";
+  commentaireSuccess.value = "";
+
+  if (!authUserId.value) {
+    commentaireError.value = "Vous devez être connecté pour commenter.";
+    return;
+  }
+  if (!isProf.value) {
+    commentaireError.value = "Seuls les professeurs peuvent laisser un commentaire.";
+    return;
+  }
+  if (!projet.value?.id) {
+    commentaireError.value = "Projet introuvable.";
+    return;
+  }
+
+  const contenu = String(commentaireForm.value.contenu || "").trim();
+  if (!contenu) {
+    commentaireError.value = "Le commentaire est vide.";
+    return;
+  }
+
+  creatingCommentaire.value = true;
+
+  try {
+    await withTimeout(
+      pb.collection("Commentaire").create({
+        contenu,
+        date_commentaire: new Date().toISOString().slice(0, 10),
+        id_auteur: authUserId.value,
+        id_projet: projet.value.id,
+      }),
+      15000,
+      "Création commentaire"
+    );
+
+    commentaireSuccess.value = "Commentaire ajouté ✅";
+    showAddCommentaire.value = false;
+    commentaireForm.value.contenu = "";
+
+    await reloadCommentaires();
+  } catch (err) {
+    console.error("PB ERROR:", err);
+    console.error("PB DATA:", err?.data);
+
+    const fieldErrors = err?.data?.data ? JSON.stringify(err.data.data, null, 2) : "";
+    const msg = err?.data?.message || err?.message || "Erreur PocketBase";
+
+    commentaireError.value = fieldErrors ? `${msg}\n${fieldErrors}` : msg;
+  } finally {
+    creatingCommentaire.value = false;
+  }
+};
+
+/* ===========================
+   ✅ Mounted : charger projet + groupe/membres + étapes + livrables + commentaires
    =========================== */
 onMounted(async () => {
   const projetId = id.value;
@@ -508,13 +654,9 @@ onMounted(async () => {
     const groupeId = projet.value?.groupe;
 
     if (groupeId) {
-      groupe.value = await withTimeout(
-        pb.collection("Groupe").getOne(groupeId),
-        15000,
-        "Chargement groupe"
-      );
+      groupe.value = await withTimeout(pb.collection("Groupe").getOne(groupeId), 15000, "Chargement groupe");
 
-      // Membres du groupe (pour affichage + fallback assignation)
+      // Membres du groupe
       if (Array.isArray(groupe.value?.membres) && groupe.value.membres.length > 0) {
         const orFilter = groupe.value.membres.map((uid) => `id="${uid}"`).join(" || ");
         membres.value = await withTimeout(
@@ -533,11 +675,9 @@ onMounted(async () => {
       membres.value = [];
     }
 
-    // Étapes consultables par tous
     await reloadEtapes();
-
-    // Livrables (filtrés selon canEdit)
     await reloadLivrables();
+    await reloadCommentaires();
   } catch (err) {
     console.error(err);
     error.value = err?.message || "Erreur lors du chargement du projet";
@@ -595,6 +735,13 @@ onMounted(async () => {
               >
                 👀 Lecture seule
               </span>
+
+              <span
+                v-if="isProf"
+                class="ml-2 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#CFFFBC]/10 border border-[#CFFFBC]/20 text-sm text-[#CFFFBC] font-semibold"
+              >
+                🎓 Prof
+              </span>
             </div>
 
             <!-- Actions couverture (uniquement si canEdit) -->
@@ -619,6 +766,7 @@ onMounted(async () => {
                 class="px-4 py-2 rounded-full bg-red-500/15 border border-red-300/20 hover:bg-red-500/20 transition text-sm font-semibold text-red-200"
                 :disabled="coverUploading"
                 @click="removeCover"
+                type="button"
               >
                 Retirer
               </button>
@@ -777,6 +925,140 @@ onMounted(async () => {
             </div>
           </div>
 
+          <!-- COMMENTAIRES (prof uniquement pour ajouter) -->
+          <section class="mt-12">
+            <div class="flex items-center justify-between gap-4 flex-wrap">
+              <h2 class="text-xl font-extrabold text-white">Commentaires (professeurs)</h2>
+
+              <button
+                v-if="isProf"
+                class="px-4 py-2 rounded-xl bg-white/5 border border-white/15 hover:bg-white/10 transition text-sm font-semibold text-white/80"
+                @click="openAddCommentaire"
+                type="button"
+              >
+                + Ajouter un commentaire
+              </button>
+
+              <span v-else class="text-sm text-white/55">
+                Seuls les professeurs peuvent commenter.
+              </span>
+            </div>
+
+            <p v-if="commentaireError && !showAddCommentaire" class="mt-3 text-sm text-red-300 whitespace-pre-wrap">
+              {{ commentaireError }}
+            </p>
+
+            <p v-if="commentaireSuccess && !showAddCommentaire" class="mt-3 text-sm text-[#CFFFBC]">
+              {{ commentaireSuccess }}
+            </p>
+
+            <div v-if="loadingCommentaires" class="mt-4 text-white/70">
+              Chargement des commentaires...
+            </div>
+
+            <div v-else-if="commentaires.length" class="mt-5 space-y-4">
+              <article
+                v-for="c in commentaires"
+                :key="c.id"
+                class="rounded-2xl bg-[#2B3140] border border-white/10 p-5"
+              >
+                <div class="flex items-start justify-between gap-4">
+                  <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-10 h-10 rounded-full overflow-hidden border border-white/10 bg-white/5 grid place-items-center">
+                      <img
+                        v-if="userAvatarUrl(c?.expand?.id_auteur)"
+                        :src="userAvatarUrl(c?.expand?.id_auteur)"
+                        alt=""
+                        class="w-full h-full object-cover"
+                      />
+                      <span v-else class="text-xs font-extrabold text-white/70">
+                        {{ initials(userDisplayName(c?.expand?.id_auteur)) }}
+                      </span>
+                    </div>
+
+                    <div class="min-w-0">
+                      <p class="font-extrabold text-white truncate">
+                        {{ userDisplayName(c?.expand?.id_auteur) }}
+                      </p>
+                      <p class="text-xs text-white/55">
+                        {{ formatDateTimeFr(c.created) }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <span class="px-3 py-1 rounded-full bg-[#CFFFBC]/10 border border-[#CFFFBC]/20 text-xs font-bold text-[#CFFFBC]">
+                    Prof
+                  </span>
+                </div>
+
+                <p class="mt-4 text-white/85 whitespace-pre-line leading-relaxed">
+                  {{ c.contenu }}
+                </p>
+              </article>
+            </div>
+
+            <div
+              v-else
+              class="mt-4 rounded-2xl border border-white/10 bg-black/20 p-5 text-white/70"
+            >
+              Aucun commentaire pour le moment.
+            </div>
+
+            <!-- MODAL AJOUT COMMENTAIRE -->
+            <div
+              v-if="showAddCommentaire"
+              class="fixed inset-0 z-50 bg-black/60 grid place-items-center px-6"
+            >
+              <div class="w-full max-w-xl rounded-3xl bg-[#1B2130] border border-white/10 shadow-xl p-7">
+                <div class="flex items-start justify-between gap-4">
+                  <h3 class="text-lg font-extrabold text-white">Ajouter un commentaire</h3>
+
+                  <button class="text-white/60 hover:text-white" @click="showAddCommentaire = false" type="button">
+                    ✕
+                  </button>
+                </div>
+
+                <div class="mt-5 space-y-4">
+                  <div>
+                    <label class="text-sm text-white/70">Commentaire</label>
+                    <textarea
+                      v-model="commentaireForm.contenu"
+                      class="mt-1 w-full min-h-[130px] rounded-xl bg-black/20 border border-white/10 px-4 py-3 text-white outline-none focus:border-white/25"
+                      placeholder="Écrire un retour pédagogique..."
+                    />
+                  </div>
+
+                  <p v-if="commentaireError" class="text-sm text-red-300 whitespace-pre-wrap">
+                    {{ commentaireError }}
+                  </p>
+                  <p v-else-if="commentaireSuccess" class="text-sm text-[#CFFFBC]">
+                    {{ commentaireSuccess }}
+                  </p>
+
+                  <div class="pt-2 flex items-center justify-end gap-3">
+                    <button
+                      class="px-4 py-2 rounded-full bg-white/10 border border-white/15 hover:bg-white/15 transition text-sm font-semibold text-white"
+                      :disabled="creatingCommentaire"
+                      @click="showAddCommentaire = false"
+                      type="button"
+                    >
+                      Annuler
+                    </button>
+
+                    <button
+                      class="px-4 py-2 rounded-full bg-[#CFFFBC]/20 border border-[#CFFFBC]/30 hover:bg-[#CFFFBC]/25 transition text-sm font-extrabold text-[#CFFFBC]"
+                      :disabled="creatingCommentaire"
+                      @click="createCommentaire"
+                      type="button"
+                    >
+                      {{ creatingCommentaire ? "Enregistrement..." : "Publier" }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <!-- LIENS ET DOCUMENTS -->
           <section class="mt-12">
             <div class="flex items-center justify-between gap-4 flex-wrap">
@@ -786,6 +1068,7 @@ onMounted(async () => {
                 v-if="canEdit"
                 class="px-4 py-2 rounded-xl bg-white/5 border border-white/15 hover:bg-white/10 transition text-sm font-semibold text-white/80"
                 @click="openAddLivrable"
+                type="button"
               >
                 + Ajouter un document
               </button>
@@ -839,7 +1122,7 @@ onMounted(async () => {
                 <div class="flex items-start justify-between gap-4">
                   <h3 class="text-lg font-extrabold text-white">Ajouter un document</h3>
 
-                  <button class="text-white/60 hover:text-white" @click="showAddLivrable = false">
+                  <button class="text-white/60 hover:text-white" @click="showAddLivrable = false" type="button">
                     ✕
                   </button>
                 </div>
