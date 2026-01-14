@@ -33,11 +33,17 @@ const dashboardRoute = computed(() => {
   const u = authUser.value;
   const t = String(u?.type_utilisateur || u?.role || u?.type || "").toLowerCase();
 
-  if (t === "prof" || t === "enseignant" || t === "admin") {
+  if (t === "admin") {
+    return "/admin-dashboard";
+  }
+
+  if (t === "prof" || t === "enseignant") {
     return "/enseignant-dashboard";
   }
+
   return "/eleve-dashboard";
 });
+
 
 // Initiale fallback
 const displayInitial = computed(() => {

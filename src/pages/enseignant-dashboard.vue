@@ -2,8 +2,9 @@
 import AppHeader from "@/components/AppHeader.vue";
 import { pb } from "../pb";
 import { ref, computed, onMounted } from "vue";
-import { RouterLink } from "vue-router";
+import { RouterLink, useRouter } from "vue-router";
 
+const router = useRouter();
 
 const loading = ref(true);
 const error = ref(null);
@@ -30,7 +31,6 @@ const typeSujetLabel = (t) => {
   return t || "—";
 };
 
-
 const imageMarqueUrl = (s) => {
   if (!s?.image_marque) return null;
   return pb.files.getURL(s, s.image_marque);
@@ -41,11 +41,24 @@ const sujetPdfUrl = (s) => {
   return pb.files.getURL(s, s.sujet_pdf);
 };
 
-// ✅ sécurité (UI) : uniquement prof/admin
+// ✅ sécurité (UI) : uniquement prof/admin/enseignant
 const canAccess = computed(() => {
   const t = String(userType.value).toLowerCase();
   return t === "prof" || t === "admin" || t === "enseignant";
 });
+
+// ✅ Déconnexion
+const logout = async () => {
+  try {
+    pb.authStore.clear();
+    user.value = null;
+    sujets.value = [];
+    await router.push("/login"); // adapte si ta route login est différente
+  } catch (e) {
+    console.error(e);
+    error.value = "Erreur lors de la déconnexion";
+  }
+};
 
 onMounted(async () => {
   loading.value = true;
@@ -60,8 +73,6 @@ onMounted(async () => {
     user.value = await pb.collection("users").getOne(pb.authStore.model.id);
 
     if (!canAccess.value) {
-      // si tu veux le renvoyer vers eleve-dashboard au lieu d’afficher le message
-      // router.push("/eleve-dashboard");
       return;
     }
 
@@ -93,7 +104,9 @@ onMounted(async () => {
           v-if="!canAccess"
           class="min-h-[calc(100vh-140px)] flex items-center justify-center"
         >
-          <div class="max-w-xl w-full text-center bg-white/5 border border-white/10 rounded-3xl p-8 sm:p-10">
+          <div
+            class="max-w-xl w-full text-center bg-white/5 border border-white/10 rounded-3xl p-8 sm:p-10"
+          >
             <h1 class="text-3xl font-extrabold mb-3">Accès restreint</h1>
             <p class="text-white/70">
               Vous n’avez pas les droits pour accéder au tableau de bord enseignant.
@@ -118,14 +131,25 @@ onMounted(async () => {
               <p class="text-white/60 mt-2">
                 Tableau de bord enseignant • Vos sujets proposés
               </p>
+
+              <!-- ✅ Bouton déconnexion -->
+              <button
+                type="button"
+                @click="logout"
+                class="mt-5 inline-flex items-center justify-center px-5 py-2.5 rounded-full bg-white/10 border border-white/15 text-white/90 font-semibold hover:bg-white/15 transition"
+              >
+                Se déconnecter
+              </button>
             </div>
 
-            <RouterLink
-              to="/proposer_projet"
-              class="inline-flex items-center justify-center px-6 py-3 rounded-full bg-[#CCFFBC] text-black font-bold hover:bg-[#E4FFD4] transition"
-            >
-              + Proposer un sujet
-            </RouterLink>
+            <div class="flex items-center gap-3">
+              <RouterLink
+                to="/proposer_projet"
+                class="inline-flex items-center justify-center px-6 py-3 rounded-full bg-[#CCFFBC] text-black font-bold hover:bg-[#E4FFD4] transition"
+              >
+                + Proposer un sujet
+              </RouterLink>
+            </div>
           </div>
 
           <!-- Stats -->
@@ -165,10 +189,12 @@ onMounted(async () => {
                 v-if="sujets.length"
                 class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
               >
-                <div
+                <!-- ✅ CARTE CLIQUABLE => /sujets/:id -->
+                <RouterLink
                   v-for="s in sujets"
                   :key="s.id"
-                  class="group relative rounded-3xl overflow-hidden bg-black/40 border border-white/10 shadow-xl"
+                  :to="`/sujets/${s.id}`"
+                  class="group relative rounded-3xl overflow-hidden bg-black/40 border border-white/10 shadow-xl hover:scale-[1.01] transition-transform"
                 >
                   <!-- Image -->
                   <div class="h-44 w-full bg-white/5">
@@ -188,10 +214,14 @@ onMounted(async () => {
 
                   <!-- Badges -->
                   <div class="absolute top-4 left-4 flex flex-wrap gap-2">
-                    <span class="text-xs font-semibold px-3 py-1 rounded-full bg-[#CCFFBC] text-black">
+                    <span
+                      class="text-xs font-semibold px-3 py-1 rounded-full bg-[#CCFFBC] text-black"
+                    >
                       {{ anneeLabelText(s.annee) }}
                     </span>
-                    <span class="text-xs font-semibold px-3 py-1 rounded-full bg-[#CCFFBC] text-black">
+                    <span
+                      class="text-xs font-semibold px-3 py-1 rounded-full bg-[#CCFFBC] text-black"
+                    >
                       {{ typeSujetLabel(s.type_sujet) }}
                     </span>
                   </div>
@@ -229,6 +259,7 @@ onMounted(async () => {
                         v-if="sujetPdfUrl(s)"
                         :href="sujetPdfUrl(s)"
                         target="_blank"
+                        @click.stop
                         class="text-sm text-white/80 hover:text-white underline underline-offset-4"
                       >
                         Voir le PDF
@@ -240,7 +271,7 @@ onMounted(async () => {
                       </span>
                     </div>
                   </div>
-                </div>
+                </RouterLink>
               </div>
 
               <div

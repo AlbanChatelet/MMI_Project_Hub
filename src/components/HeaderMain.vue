@@ -5,12 +5,11 @@
     >
       <!-- ✅ Mobile: header moins haut -->
       <div class="flex items-center justify-between px-3 py-2 md:px-10 md:py-5">
-
-        <!-- ✅ Logo plus petit en mobile (c'est ça qui faisait l'épaisseur) -->
-        <div class="relative md:absolute md:top-1/2 md:-translate-y-1/2 md:left-10 lg:left-20 shrink-0 leading-none">
-
+        <!-- ✅ Logo plus petit en mobile -->
+        <div
+          class="relative md:absolute md:top-1/2 md:-translate-y-1/2 md:left-10 lg:left-20 shrink-0 leading-none"
+        >
           <MyLogo class="w-12 h-12 md:w-[160px] md:mt-1 md:h-auto drop-shadow-xl" />
-
         </div>
 
         <div class="hidden md:block md:w-32 lg:w-44"></div>
@@ -49,7 +48,7 @@
             <span class="text-lg leading-none">›</span>
           </RouterLink>
 
-          <!-- ✅ Burger un poil plus petit -->
+          <!-- ✅ Burger -->
           <button
             @click="isMenuOpen = !isMenuOpen"
             class="text-[#CCFFBC] p-1"
@@ -75,6 +74,14 @@
           >
             Galerie
           </RouterLink>
+
+          <RouterLink
+            :to="espaceLink"
+            @click="isMenuOpen = false"
+            class="text-[#CCFFBC] text-lg font-medium"
+          >
+            Mon espace
+          </RouterLink>
         </div>
       </transition>
     </div>
@@ -82,15 +89,37 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import MyLogo from '@/components/icons/MyLogo.vue'
-import { RouterLink } from 'vue-router'
-import { pb } from '@/pb'
+import { ref, computed } from "vue";
+import MyLogo from "@/components/icons/MyLogo.vue";
+import { RouterLink } from "vue-router";
+import { pb } from "@/pb";
 
-const isMenuOpen = ref(false)
+const isMenuOpen = ref(false);
 
-const isAuthenticated = computed(() => pb.authStore.isValid)
-const espaceLink = computed(() => (isAuthenticated.value ? '/eleve-dashboard' : '/login'))
+const isAuthenticated = computed(() => pb.authStore?.isValid);
+
+// récupère l'utilisateur auth (selon ton code, parfois c'est model, parfois record)
+const authUser = computed(() => pb.authStore?.model || pb.authStore?.record || null);
+
+const userType = computed(() =>
+  String(
+    authUser.value?.type_utilisateur ||
+    authUser.value?.type ||
+    authUser.value?.role ||
+    ""
+  ).toLowerCase()
+);
+
+// ✅ lien espace selon type
+const espaceLink = computed(() => {
+  if (!isAuthenticated.value) return "/login";
+
+  if (userType.value === "admin") return "/admin-dashboard";
+  if (userType.value === "prof" || userType.value === "enseignant") return "/enseignant-dashboard";
+
+  // défaut: étudiant
+  return "/eleve-dashboard";
+});
 </script>
 
 <style scoped>

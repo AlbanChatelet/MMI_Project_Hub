@@ -71,11 +71,8 @@ const userDisplayName = (u) => {
 // ✅ Icône selon le type de livrable (anti-crash)
 const livrableIcon = (l) => {
   const type = String(l?.type_fichier || "").toLowerCase();
-
   if (type === "lien") return "🔗";
   if (type === "document") return "📄";
-
-  // fallback si la donnée est inattendue (évite page blanche)
   return "📁";
 };
 
@@ -358,9 +355,6 @@ const createEtape = async () => {
 
 /* ===========================
    ✅ Livrables : list + création (édition restreinte)
-   - type_fichier : "document" | "lien"
-   - fichier (File) pour upload
-   - url_fichier pour liens
    =========================== */
 const showAddLivrable = ref(false);
 const livrableTab = ref("document"); // document | lien
@@ -468,7 +462,6 @@ const createLivrable = async () => {
       if (authUserId.value) fd.append("id_createur", authUserId.value);
       fd.append("fichier", livrableForm.value.fichier);
 
-      // ⚠️ on met visible via défaut PB ou via update ensuite si besoin
       await withTimeout(pb.collection("Livrable").create(fd), 20000, "Upload livrable (document)");
     }
 
@@ -502,9 +495,9 @@ onMounted(async () => {
   }
 
   try {
-    // Projet consultable par tous
+    // ✅ IMPORTANT : on expand le SUJET + le commanditaire du SUJET
     projet.value = await withTimeout(
-      pb.collection("Projet").getOne(projetId, { expand: "promo,sujet" }),
+      pb.collection("Projet").getOne(projetId, { expand: "promo,sujet,sujet.commanditaire" }),
       15000,
       "Chargement projet"
     );
@@ -515,7 +508,11 @@ onMounted(async () => {
     const groupeId = projet.value?.groupe;
 
     if (groupeId) {
-      groupe.value = await withTimeout(pb.collection("Groupe").getOne(groupeId), 15000, "Chargement groupe");
+      groupe.value = await withTimeout(
+        pb.collection("Groupe").getOne(groupeId),
+        15000,
+        "Chargement groupe"
+      );
 
       // Membres du groupe (pour affichage + fallback assignation)
       if (Array.isArray(groupe.value?.membres) && groupe.value.membres.length > 0) {
@@ -549,7 +546,6 @@ onMounted(async () => {
   }
 });
 </script>
-
 
 <template>
   <div class="min-h-screen bg-[#151A24] text-white">
@@ -638,12 +634,13 @@ onMounted(async () => {
                 {{ projet?.titre || "(Sans titre)" }}
               </h1>
 
+              <!-- ✅ Commanditaire du SUJET (pas du projet) -->
               <p class="mt-3 text-white/80 text-sm">
                 <span class="font-semibold">Commanditaire :</span>
                 {{
-                  projet?.expand?.commanditaire?.name
-                  || projet?.expand?.commanditaire?.username
-                  || projet?.expand?.commanditaire?.email
+                  sujet?.expand?.commanditaire?.name
+                  || sujet?.expand?.commanditaire?.username
+                  || sujet?.expand?.commanditaire?.email
                   || "Non renseigné"
                 }}
               </p>
@@ -770,9 +767,7 @@ onMounted(async () => {
                 rel="noreferrer"
                 class="w-44 h-32 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition flex flex-col items-center justify-center gap-3"
               >
-                <div
-                  class="w-10 h-10 rounded-lg bg-[#CFFFBC]/10 flex items-center justify-center"
-                >
+                <div class="w-10 h-10 rounded-lg bg-[#CFFFBC]/10 flex items-center justify-center">
                   <span class="text-[#CFFFBC] text-2xl leading-none">📄</span>
                 </div>
                 <span class="text-[#CFFFBC] font-semibold">Sujet</span>
@@ -782,23 +777,23 @@ onMounted(async () => {
             </div>
           </div>
 
-          <!-- LIENS & DOCUMENTS (Livrables) -->
+          <!-- LIENS ET DOCUMENTS -->
           <section class="mt-12">
-            <div class="flex items-end justify-between gap-4 flex-wrap">
+            <div class="flex items-center justify-between gap-4 flex-wrap">
               <h2 class="text-xl font-extrabold text-white">Liens et documents</h2>
 
               <button
                 v-if="canEdit"
-                class="px-4 py-2 rounded-xl border border-white/20 text-white/70 hover:bg-white/10 transition"
+                class="px-4 py-2 rounded-xl bg-white/5 border border-white/15 hover:bg-white/10 transition text-sm font-semibold text-white/80"
                 @click="openAddLivrable"
               >
                 + Ajouter un document
               </button>
-            </div>
 
-            <p v-if="livrableError && !showAddLivrable" class="mt-3 text-sm text-red-300">
-              {{ livrableError }}
-            </p>
+              <span v-else class="text-sm text-white/55">
+                Lecture seule (ajout réservé aux membres du groupe)
+              </span>
+            </div>
 
             <div v-if="livrables.length" class="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <a
@@ -807,19 +802,22 @@ onMounted(async () => {
                 :href="l.type_fichier === 'lien' ? l.url_fichier : (livrableFileUrl(l) || '#')"
                 target="_blank"
                 rel="noreferrer"
-                class="rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition p-5 flex items-center gap-4"
+                class="rounded-2xl bg-[#2B3140] border border-white/10 hover:border-white/20 transition p-5 flex items-center gap-4"
               >
-                <div class="w-12 h-12 rounded-xl bg-[#CFFFBC]/10 grid place-items-center text-xl">
-                  <span v-if="l.type_fichier === 'lien'">🔗</span>
-                  <span v-else>📄</span>
+                <div class="w-12 h-12 rounded-xl bg-[#CFFFBC]/10 grid place-items-center text-2xl">
+                  {{ livrableIcon(l) }}
                 </div>
 
                 <div class="min-w-0">
                   <p class="font-extrabold text-[#CFFFBC] truncate">
                     {{ l.titre }}
                   </p>
-                  <p class="text-sm text-white/60">
-                    Version : {{ l.version || "—" }}
+                  <p class="text-sm text-white/60 truncate">
+                    <span v-if="l.version">Version : {{ l.version }}</span>
+                    <span v-else>Aucune version</span>
+                  </p>
+                  <p class="text-sm text-white/50">
+                    {{ l.type_fichier === "lien" ? "Lien" : "Document" }}
                   </p>
                 </div>
               </a>
@@ -832,12 +830,12 @@ onMounted(async () => {
               Aucun livrable pour le moment.
             </div>
 
-            <!-- MODAL AJOUT LIVRABLE -->
+            <!-- MODAL : Ajouter un livrable -->
             <div
               v-if="showAddLivrable"
               class="fixed inset-0 z-50 bg-black/60 grid place-items-center px-6"
             >
-              <div class="w-full max-w-lg rounded-3xl bg-[#1B2130] border border-white/10 shadow-xl p-7">
+              <div class="w-full max-w-xl rounded-3xl bg-[#1B2130] border border-white/10 shadow-xl p-7">
                 <div class="flex items-start justify-between gap-4">
                   <h3 class="text-lg font-extrabold text-white">Ajouter un document</h3>
 
@@ -847,18 +845,18 @@ onMounted(async () => {
                 </div>
 
                 <!-- Tabs -->
-                <div class="mt-5 flex items-center gap-2 rounded-xl bg-black/20 border border-white/10 p-1">
+                <div class="mt-5 rounded-2xl bg-white/5 border border-white/10 p-1 flex">
                   <button
-                    class="flex-1 py-2 rounded-lg text-sm font-extrabold"
-                    :class="livrableTab === 'document' ? 'bg-[#CFFFBC] text-black' : 'text-white/70 hover:text-white'"
+                    class="flex-1 py-2 rounded-xl text-sm font-extrabold transition"
+                    :class="livrableTab === 'document' ? 'bg-[#CFFFBC] text-[#151A24]' : 'text-white/70 hover:text-white'"
                     @click="livrableTab = 'document'"
                     type="button"
                   >
                     Document
                   </button>
                   <button
-                    class="flex-1 py-2 rounded-lg text-sm font-extrabold"
-                    :class="livrableTab === 'lien' ? 'bg-[#CFFFBC] text-black' : 'text-white/70 hover:text-white'"
+                    class="flex-1 py-2 rounded-xl text-sm font-extrabold transition"
+                    :class="livrableTab === 'lien' ? 'bg-[#CFFFBC] text-[#151A24]' : 'text-white/70 hover:text-white'"
                     @click="livrableTab = 'lien'"
                     type="button"
                   >
@@ -872,7 +870,7 @@ onMounted(async () => {
                     <input
                       v-model="livrableForm.titre"
                       class="mt-1 w-full rounded-xl bg-black/20 border border-white/10 px-4 py-3 text-white outline-none focus:border-white/25"
-                      placeholder="Ex : Maquette mobile"
+                      placeholder="Ex : Maquette"
                     />
                   </div>
 
@@ -881,39 +879,32 @@ onMounted(async () => {
                     <input
                       v-model="livrableForm.version"
                       class="mt-1 w-full rounded-xl bg-black/20 border border-white/10 px-4 py-3 text-white outline-none focus:border-white/25"
-                      placeholder="Ex : v1 / v2 / finale"
+                      placeholder="Ex : v1"
                     />
                   </div>
 
-                  <!-- DOCUMENT -->
+                  <!-- Document -->
                   <div v-if="livrableTab === 'document'">
                     <label class="text-sm text-white/70">Fichier</label>
 
-                    <label
-                      class="mt-2 block rounded-2xl border border-white/15 bg-black/20 p-6 text-center cursor-pointer hover:bg-black/25 transition"
-                    >
-                      <div class="text-5xl">📥</div>
-                      <p class="mt-2 text-white/80 font-semibold">
-                        Déposez le fichier pour le téléverser
-                      </p>
-                      <p class="text-sm text-white/60 underline">
-                        Naviguer dans les fichiers
-                      </p>
+                    <div class="mt-2 rounded-2xl bg-black/20 border border-white/10 p-5 text-center">
+                      <div class="text-3xl">📥</div>
+                      <p class="mt-2 text-white/80 font-semibold">Déposez le fichier pour le téléverser</p>
+                      <p class="text-sm text-white/60 underline">Naviguer dans les fichiers</p>
 
-                      <input type="file" class="hidden" @change="onLivrableFileChange" />
+                      <input
+                        type="file"
+                        class="mt-4 block w-full text-sm text-white/70"
+                        @change="onLivrableFileChange"
+                      />
 
-                      <p v-if="livrableForm.fichier" class="mt-3 text-sm text-[#CFFFBC]">
+                      <p v-if="livrableForm.fichier" class="mt-3 text-sm text-[#CFFFBC] font-semibold">
                         Sélectionné : {{ livrableForm.fichier.name }}
                       </p>
-                    </label>
-
-                    <p class="mt-2 text-xs text-white/50">
-                      ⚠️ Il faut un champ <span class="font-semibold text-white/70">File</span> nommé
-                      <span class="font-semibold text-white/70">fichier</span> dans la collection Livrable.
-                    </p>
+                    </div>
                   </div>
 
-                  <!-- LIEN -->
+                  <!-- Lien -->
                   <div v-else>
                     <label class="text-sm text-white/70">URL</label>
                     <input
@@ -923,7 +914,7 @@ onMounted(async () => {
                     />
                   </div>
 
-                  <p v-if="livrableError" class="text-sm text-red-300">{{ livrableError }}</p>
+                  <p v-if="livrableError" class="text-sm text-red-300 whitespace-pre-wrap">{{ livrableError }}</p>
                   <p v-else-if="livrableSuccess" class="text-sm text-[#CFFFBC]">{{ livrableSuccess }}</p>
 
                   <div class="pt-2 flex items-center justify-end gap-3">
@@ -931,6 +922,7 @@ onMounted(async () => {
                       class="px-4 py-2 rounded-full bg-white/10 border border-white/15 hover:bg-white/15 transition text-sm font-semibold text-white"
                       :disabled="creatingLivrable"
                       @click="showAddLivrable = false"
+                      type="button"
                     >
                       Annuler
                     </button>
@@ -939,175 +931,15 @@ onMounted(async () => {
                       class="px-4 py-2 rounded-full bg-[#CFFFBC]/20 border border-[#CFFFBC]/30 hover:bg-[#CFFFBC]/25 transition text-sm font-extrabold text-[#CFFFBC]"
                       :disabled="creatingLivrable"
                       @click="createLivrable"
+                      type="button"
                     >
-                      {{ creatingLivrable ? "Envoi..." : "Enregistrer les modifications" }}
+                      {{ creatingLivrable ? "Enregistrement..." : "Enregistrer les modifications" }}
                     </button>
                   </div>
                 </div>
               </div>
             </div>
           </section>
-          <!-- LIENS ET DOCUMENTS -->
-<section class="mt-12">
-  <div class="flex items-center justify-between gap-4 flex-wrap">
-    <h2 class="text-xl font-extrabold text-white">Liens et documents</h2>
-
-    <button
-      v-if="canEdit"
-      class="px-4 py-2 rounded-xl bg-white/5 border border-white/15 hover:bg-white/10 transition text-sm font-semibold text-white/80"
-      @click="openAddLivrable"
-    >
-      + Ajouter un document
-    </button>
-
-    <span v-else class="text-sm text-white/55">
-      Lecture seule (ajout réservé aux membres du groupe)
-    </span>
-  </div>
-
-  <!-- Liste -->
-  <div v-if="livrables.length" class="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-    <a
-      v-for="l in livrables"
-      :key="l.id"
-      :href="l.type_fichier === 'lien' ? l.url_fichier : livrableFileUrl(l)"
-      target="_blank"
-      rel="noreferrer"
-      class="rounded-2xl bg-[#2B3140] border border-white/10 hover:border-white/20 transition p-5 flex items-center gap-4"
-    >
-      <div class="w-12 h-12 rounded-xl bg-[#CFFFBC]/10 grid place-items-center text-2xl">
-        {{ livrableIcon(l) }}
-      </div>
-
-      <div class="min-w-0">
-        <p class="font-extrabold text-[#CFFFBC] truncate">
-          {{ l.titre }}
-        </p>
-        <p class="text-sm text-white/60 truncate">
-          <span v-if="l.version">Version : {{ l.version }}</span>
-          <span v-else>Aucune version</span>
-        </p>
-        <p class="text-sm text-white/50">
-          {{ l.type_fichier === "lien" ? "Lien" : "Document" }}
-        </p>
-      </div>
-    </a>
-  </div>
-
-  <!-- Empty state -->
-  <div
-    v-else
-    class="mt-4 rounded-2xl border border-white/10 bg-black/20 p-5 text-white/70"
-  >
-    Aucun livrable pour le moment.
-  </div>
-
-  <!-- MODAL : Ajouter un livrable -->
-  <div
-    v-if="showAddLivrable"
-    class="fixed inset-0 z-50 bg-black/60 grid place-items-center px-6"
-  >
-    <div class="w-full max-w-xl rounded-3xl bg-[#1B2130] border border-white/10 shadow-xl p-7">
-      <div class="flex items-start justify-between gap-4">
-        <h3 class="text-lg font-extrabold text-white">Ajouter un document</h3>
-
-        <button class="text-white/60 hover:text-white" @click="showAddLivrable = false">
-          ✕
-        </button>
-      </div>
-
-      <!-- Tabs -->
-      <div class="mt-5 rounded-2xl bg-white/5 border border-white/10 p-1 flex">
-        <button
-          class="flex-1 py-2 rounded-xl text-sm font-extrabold transition"
-          :class="livrableTab === 'document' ? 'bg-[#CFFFBC] text-[#151A24]' : 'text-white/70 hover:text-white'"
-          @click="livrableTab = 'document'"
-        >
-          Document
-        </button>
-        <button
-          class="flex-1 py-2 rounded-xl text-sm font-extrabold transition"
-          :class="livrableTab === 'lien' ? 'bg-[#CFFFBC] text-[#151A24]' : 'text-white/70 hover:text-white'"
-          @click="livrableTab = 'lien'"
-        >
-          Lien
-        </button>
-      </div>
-
-      <div class="mt-5 space-y-4">
-        <div>
-          <label class="text-sm text-white/70">Titre</label>
-          <input
-            v-model="livrableForm.titre"
-            class="mt-1 w-full rounded-xl bg-black/20 border border-white/10 px-4 py-3 text-white outline-none focus:border-white/25"
-            placeholder="Ex : Maquette"
-          />
-        </div>
-
-        <div>
-          <label class="text-sm text-white/70">Version (optionnel)</label>
-          <input
-            v-model="livrableForm.version"
-            class="mt-1 w-full rounded-xl bg-black/20 border border-white/10 px-4 py-3 text-white outline-none focus:border-white/25"
-            placeholder="Ex : v1"
-          />
-        </div>
-
-        <!-- Document -->
-        <div v-if="livrableTab === 'document'">
-          <label class="text-sm text-white/70">Fichier</label>
-
-          <div class="mt-2 rounded-2xl bg-black/20 border border-white/10 p-5 text-center">
-            <div class="text-3xl">📥</div>
-            <p class="mt-2 text-white/80 font-semibold">Déposez le fichier pour le téléverser</p>
-            <p class="text-sm text-white/60 underline">Naviguer dans les fichiers</p>
-
-            <input
-              type="file"
-              class="mt-4 block w-full text-sm text-white/70"
-              @change="onLivrableFileChange"
-            />
-
-            <p v-if="livrableForm.fichier" class="mt-3 text-sm text-[#CFFFBC] font-semibold">
-              Sélectionné : {{ livrableForm.fichier.name }}
-            </p>
-          </div>
-        </div>
-
-        <!-- Lien -->
-        <div v-else>
-          <label class="text-sm text-white/70">URL</label>
-          <input
-            v-model="livrableForm.url_fichier"
-            class="mt-1 w-full rounded-xl bg-black/20 border border-white/10 px-4 py-3 text-white outline-none focus:border-white/25"
-            placeholder="https://..."
-          />
-        </div>
-
-        <p v-if="livrableError" class="text-sm text-red-300 whitespace-pre-wrap">{{ livrableError }}</p>
-        <p v-else-if="livrableSuccess" class="text-sm text-[#CFFFBC]">{{ livrableSuccess }}</p>
-
-        <div class="pt-2 flex items-center justify-end gap-3">
-          <button
-            class="px-4 py-2 rounded-full bg-white/10 border border-white/15 hover:bg-white/15 transition text-sm font-semibold text-white"
-            :disabled="creatingLivrable"
-            @click="showAddLivrable = false"
-          >
-            Annuler
-          </button>
-
-          <button
-            class="px-4 py-2 rounded-full bg-[#CFFFBC]/20 border border-[#CFFFBC]/30 hover:bg-[#CFFFBC]/25 transition text-sm font-extrabold text-[#CFFFBC]"
-            :disabled="creatingLivrable"
-            @click="createLivrable"
-          >
-            {{ creatingLivrable ? "Enregistrement..." : "Enregistrer les modifications" }}
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
 
           <!-- TO DO LIST -->
           <section class="mt-12">
@@ -1118,6 +950,7 @@ onMounted(async () => {
                 v-if="canEdit"
                 class="px-4 py-2 rounded-full bg-[#CFFFBC]/15 border border-[#CFFFBC]/25 hover:bg-[#CFFFBC]/20 transition text-sm font-semibold text-[#CFFFBC]"
                 @click="openAddEtape"
+                type="button"
               >
                 + Ajouter une étape
               </button>
@@ -1212,7 +1045,7 @@ onMounted(async () => {
                 <div class="flex items-start justify-between gap-4">
                   <h3 class="text-lg font-extrabold text-white">Ajouter une étape</h3>
 
-                  <button class="text-white/60 hover:text-white" @click="showAddEtape = false">
+                  <button class="text-white/60 hover:text-white" @click="showAddEtape = false" type="button">
                     ✕
                   </button>
                 </div>
@@ -1330,6 +1163,7 @@ onMounted(async () => {
                       class="px-4 py-2 rounded-full bg-white/10 border border-white/15 hover:bg-white/15 transition text-sm font-semibold text-white"
                       :disabled="creatingEtape"
                       @click="showAddEtape = false"
+                      type="button"
                     >
                       Annuler
                     </button>
@@ -1338,6 +1172,7 @@ onMounted(async () => {
                       class="px-4 py-2 rounded-full bg-[#CFFFBC]/20 border border-[#CFFFBC]/30 hover:bg-[#CFFFBC]/25 transition text-sm font-extrabold text-[#CFFFBC]"
                       :disabled="creatingEtape"
                       @click="createEtape"
+                      type="button"
                     >
                       {{ creatingEtape ? "Création..." : "Créer l’étape" }}
                     </button>
