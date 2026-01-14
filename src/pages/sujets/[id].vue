@@ -245,7 +245,7 @@ watch(modalOpen, (open) => {
 });
 
 // -------------------------
-// MODALE EDIT PROF (inchangée)
+// MODALE EDIT PROF (✅ FIX: scroll + bouton visible)
 // -------------------------
 const editOpen = ref(false);
 const editSaving = ref(false);
@@ -560,6 +560,7 @@ onMounted(async () => {
 
     <!-- ==========================
          MODALE EDIT (PROF/ADMIN)
+         ✅ FIX: scroll + bouton visible
     =========================== -->
     <div
       v-if="editOpen"
@@ -569,8 +570,13 @@ onMounted(async () => {
     >
       <div class="absolute inset-0 bg-black/70" @click="closeEdit" />
 
-      <div class="relative w-full max-w-2xl rounded-2xl border border-white/10 bg-[#1C2230] shadow-2xl overflow-hidden">
-        <div class="p-6 md:p-7">
+      <!-- ✅ max height + layout colonne -->
+      <div
+        class="relative w-full max-w-2xl rounded-2xl border border-white/10 bg-[#1C2230] shadow-2xl
+               max-h-[90vh] flex flex-col"
+      >
+        <!-- ✅ Header fixe -->
+        <div class="p-6 md:p-7 border-b border-white/10">
           <div class="flex items-start justify-between gap-4">
             <div>
               <h2 class="text-3xl font-extrabold text-[#CFFFBC]">Modifier le sujet</h2>
@@ -586,8 +592,11 @@ onMounted(async () => {
               ✕
             </button>
           </div>
+        </div>
 
-          <form class="mt-6 space-y-4" @submit.prevent="saveEdit">
+        <!-- ✅ Body scrollable -->
+        <div class="flex-1 overflow-y-auto p-6 md:p-7">
+          <form class="space-y-4" @submit.prevent="saveEdit">
             <div>
               <label class="block text-sm text-white/70 mb-2">Titre</label>
               <input
@@ -698,15 +707,22 @@ onMounted(async () => {
 
             <p v-if="editError" class="text-red-300 font-medium">{{ editError }}</p>
 
-            <button
-              type="submit"
-              class="w-full bg-[#CFFFBC] text-black font-semibold py-3 rounded-full hover:bg-[#B8E6A8] transition disabled:opacity-50"
-              :disabled="editSaving"
-            >
-              <span v-if="editSaving">Enregistrement...</span>
-              <span v-else>Enregistrer les modifications</span>
-            </button>
+            <!-- ✅ espace en bas pour respirer -->
+            <div class="h-2"></div>
           </form>
+        </div>
+
+        <!-- ✅ Footer sticky : bouton toujours visible -->
+        <div class="p-6 md:p-7 border-t border-white/10 bg-[#1C2230]">
+          <button
+            type="button"
+            @click="saveEdit"
+            class="w-full bg-[#CFFFBC] text-black font-semibold py-3 rounded-full hover:bg-[#B8E6A8] transition disabled:opacity-50"
+            :disabled="editSaving"
+          >
+            <span v-if="editSaving">Enregistrement...</span>
+            <span v-else>Enregistrer les modifications</span>
+          </button>
         </div>
       </div>
     </div>
