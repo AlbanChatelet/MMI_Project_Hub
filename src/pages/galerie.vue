@@ -3,7 +3,7 @@
 import { ref, onMounted, computed } from "vue";
 import { pb } from "../pb";
 import AppHeader from "@/components/AppHeader.vue";
-
+import UserIcon from "@/components/icons/UserIcon.vue";
 const projets = ref([]);
 const groupes = ref([]); // ✅ pour retrouver le groupe + membres
 const promotionsById = ref({}); // cache Promotions utilisées par les projets
@@ -287,25 +287,17 @@ const resetFilters = () => {
               </div>
 
               <!-- Overlay bas -->
-              <div class="absolute inset-x-0 bottom-0 p-6 bg-gradient-to-t from-black/90 via-black/50 to-transparent">
+              <div class="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent">
                 <h3 class="text-3xl font-extrabold text-[#CFFFBC] leading-tight">
                   {{ item.projet.titre || "(Sans titre)" }}
                 </h3>
 
-                <!-- Parcours -->
-                <div class="mt-3 flex flex-wrap gap-2">
-                  <span
-                    v-for="t in item.tracks"
-                    :key="t"
-                    class="text-xs px-3 py-1 rounded-full bg-white/10 border border-white/15 text-white/80"
-                  >
-                    {{ parcoursLabel(t) }}
-                  </span>
-                </div>
+                
+                
 
                 <!-- ✅ Membres du groupe (réel) -->
-                <div class="mt-4 text-white/70 text-sm flex items-center gap-2">
-                  <span class="text-[#CFFFBC]">👤</span>
+                <div class=" text-[#CCFFBC]/70 text-sm flex items-center gap-2">
+                  <span class="text-[#CCFFBC]"> <UserIcon /></span>
                   <span class="line-clamp-1">
                     {{ formatMembres(item.projet.id) }}
                   </span>
