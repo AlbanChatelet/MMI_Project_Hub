@@ -11,7 +11,7 @@
   <div class="flex flex-col md:flex-row min-h-screen">
     <!-- Section soumettre un projet -->
     <div
-      class="w-full md:w-1/3 bg-gray-bg bg-cover bg-center flex flex-col justify-center items-center p-6 sm:p-8"
+      class="w-full md:w-1/3 bg-gray-bg bg-[#3D3F4A] bg-center flex flex-col justify-center items-center p-6 sm:p-8"
     >
       <!-- LOGO MOBILE -->
       <RouterLink
