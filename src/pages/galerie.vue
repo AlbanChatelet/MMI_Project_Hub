@@ -288,7 +288,7 @@ const resetFilters = () => {
 
               <!-- Overlay bas -->
               <div class="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent">
-                <h3 class="text-3xl font-extrabold text-[#CFFFBC] leading-tight">
+                <h3 class="text-2xl font-extrabold text-[#CFFFBC] leading-tight">
                   {{ item.projet.titre || "(Sans titre)" }}
                 </h3>
 
@@ -296,7 +296,7 @@ const resetFilters = () => {
                 
 
                 <!-- ✅ Membres du groupe (réel) -->
-                <div class=" text-[#CCFFBC]/70 text-sm flex items-center gap-2">
+                <div class=" text-[#CCFFBC]/70 mt-1 text-sm flex items-center gap-2">
                   <span class="text-[#CCFFBC]"> <UserIcon /></span>
                   <span class="line-clamp-1">
                     {{ formatMembres(item.projet.id) }}
