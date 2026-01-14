@@ -131,7 +131,7 @@ const login = async () => {
 
     const role = auth.record.role;
 
-    if (role === "etudiant") router.push("/etudiant-dashboard");
+    if (role === "etudiant") router.push("/eleve-dashboard");
     else if (role === "prof") router.push("/enseignant-dashboard");
     
     else router.push("/admin-dashboard");
