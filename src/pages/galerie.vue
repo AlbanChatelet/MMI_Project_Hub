@@ -5,13 +5,15 @@ import { pb } from "../pb";
 import AppHeader from "@/components/AppHeader.vue";
 
 const projets = ref([]);
+const groupes = ref([]); // ✅ pour retrouver le groupe + membres
 const promotionsById = ref({}); // cache Promotions utilisées par les projets
 const loading = ref(true);
 const error = ref(null);
 
-// Filtres (liés)
+// Filtres
 const selectedAnnee = ref("");     // "" | "1" | "2" | "3"
 const selectedParcours = ref("");  // "" | "dev" | "créa" | "com"
+const selectedType = ref("");      // "" | "solo" | "collectif"
 
 // labels
 const parcoursLabel = (parcours) => {
@@ -29,7 +31,36 @@ const anneeLabel = (annee) => {
 // url image projet (champ "photo")
 const projetPhotoUrl = (projet) => {
   if (!projet?.photo) return null;
-  return pb.files.getUrl(projet, projet.photo);
+  return pb.files.getURL(projet, projet.photo);
+};
+
+// ✅ helpers membres
+const userDisplayName = (u) => {
+  const prenom = String(u?.prenom || "").trim();
+  const nom = String(u?.nom || "").trim();
+  const full = `${prenom} ${nom}`.trim();
+  return full || u?.name || u?.username || u?.email || "Utilisateur";
+};
+
+// Trouve le groupe associé à un projet (dans ta DB tu utilises Groupe.projet)
+const getGroupeByProjetId = (projetId) => {
+  return groupes.value.find(
+    (g) =>
+      g.projet === projetId ||
+      (Array.isArray(g.projet) && g.projet.includes(projetId))
+  );
+};
+
+const getGroupeMembres = (projetId) => {
+  const g = getGroupeByProjetId(projetId);
+  const membres = g?.expand?.membres;
+  return Array.isArray(membres) ? membres : [];
+};
+
+const formatMembres = (projetId) => {
+  const membres = getGroupeMembres(projetId);
+  if (!membres.length) return "—";
+  return membres.map((m) => userDisplayName(m)).join(", ");
 };
 
 onMounted(async () => {
@@ -37,10 +68,17 @@ onMounted(async () => {
     // 1) récupère tous les projets
     const projetsRes = await pb.collection("Projet").getFullList({
       sort: "-created",
+      expand: "sujet", // ✅ pour type_sujet (solo/collectif) si c’est dans sujet
     });
     projets.value = projetsRes;
 
-    // 2) récupère les Promotions liées via Projet.promo (relation multiple)
+    // 2) récupère tous les groupes + membres (pour afficher les membres)
+    groupes.value = await pb.collection("Groupe").getFullList({
+      expand: "membres",
+      sort: "created",
+    });
+
+    // 3) récupère les Promotions liées via Projet.promo (relation multiple)
     const promoIds = new Set();
     for (const p of projets.value) {
       const rel = p.promo;
@@ -69,7 +107,7 @@ onMounted(async () => {
   }
 });
 
-// On prépare des infos par projet : années + parcours + rawPromo
+// On prépare des infos par projet : années + parcours + rawPromo + type_sujet
 const projetsEnrichis = computed(() => {
   return projets.value.map((p) => {
     const promoRel = Array.isArray(p.promo) ? p.promo : p.promo ? [p.promo] : [];
@@ -88,30 +126,52 @@ const projetsEnrichis = computed(() => {
       rawPromo.push({ annee: a, parcours: t });
     }
 
+    // ✅ type (solo/collectif) depuis le sujet (priorité) sinon depuis le projet
+    const typeSujet =
+      String(p?.expand?.sujet?.type_sujet || p?.type_sujet || p?.type || "")
+        .trim()
+        .toLowerCase();
+
     return {
       projet: p,
       years: Array.from(yearsSet).sort(),
       tracks: Array.from(tracksSet),
       rawPromo,
+      typeSujet, // ✅ pour filtre Solo/Collectif
     };
   });
 });
 
-// ✅ filtre lié année+parcours (string-safe)
+// ✅ filtre lié année+parcours + filtre solo/collectif
 const projetsFiltres = computed(() => {
   const annee = selectedAnnee.value || "";
   const parcours = selectedParcours.value || "";
+  const type = selectedType.value || "";
 
-  if (!annee && !parcours) return projetsEnrichis.value;
+  return projetsEnrichis.value.filter((item) => {
+    // filtre annee/parcours
+    const okPromo =
+      !annee && !parcours
+        ? true
+        : item.rawPromo.some((rp) => {
+            const okA = annee ? rp.annee === annee : true;
+            const okP = parcours ? rp.parcours === parcours : true;
+            return okA && okP;
+          });
 
-  return projetsEnrichis.value.filter((item) =>
-    item.rawPromo.some((rp) => {
-      const okA = annee ? rp.annee === annee : true;
-      const okP = parcours ? rp.parcours === parcours : true;
-      return okA && okP;
-    })
-  );
+    // filtre solo/collectif
+    const okType = type ? item.typeSujet === type : true;
+
+    return okPromo && okType;
+  });
 });
+
+// reset
+const resetFilters = () => {
+  selectedAnnee.value = "";
+  selectedParcours.value = "";
+  selectedType.value = "";
+};
 </script>
 
 <template>
@@ -146,15 +206,16 @@ const projetsFiltres = computed(() => {
               <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-black/70">⌄</span>
             </div>
 
-            <!-- Collectif (maquette visuelle) -->
+            <!-- ✅ Solo / Collectif (fonctionnel) -->
             <div class="relative">
-              <button
-                type="button"
-                class="bg-[#CFFFBC] text-black font-medium rounded-full px-6 py-2 pr-10 shadow"
-                title="Collectif (maquette)"
+              <select
+                v-model="selectedType"
+                class="appearance-none bg-[#CFFFBC] text-black font-medium rounded-full px-6 py-2 pr-10 shadow"
               >
-                Collectif
-              </button>
+                <option value="">Solo + Collectif</option>
+                <option value="solo">Solo</option>
+                <option value="collectif">Collectif</option>
+              </select>
               <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-black/70">⌄</span>
             </div>
 
@@ -172,20 +233,11 @@ const projetsFiltres = computed(() => {
               <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-black/70">⌄</span>
             </div>
 
-            <!-- Favoris (maquette visuelle) -->
-            <button
-              type="button"
-              class="bg-white text-black font-medium rounded-full px-6 py-2 shadow"
-              title="Favoris (maquette)"
-            >
-              Favoris
-            </button>
-
-            <!-- Reset -->
+            <!-- ✅ Reset -->
             <button
               type="button"
               class="ml-2 text-[#CFFFBC] text-sm hover:underline"
-              @click="selectedAnnee = ''; selectedParcours = ''"
+              @click="resetFilters"
             >
               Réinitialiser
             </button>
@@ -215,12 +267,7 @@ const projetsFiltres = computed(() => {
                 Pas de photo
               </div>
 
-              <!-- Coeur (visuel) -->
-              <div class="absolute top-5 right-5">
-                <div class="w-11 h-11 rounded-full bg-[#CFFFBC] text-black flex items-center justify-center shadow">
-                  ♡
-                </div>
-              </div>
+              
 
               <!-- Badges top-left -->
               <div class="absolute top-5 left-5 flex gap-2">
@@ -230,8 +277,12 @@ const projetsFiltres = computed(() => {
                 >
                   {{ anneeLabel(item.years[item.years.length - 1]) }}
                 </span>
-                <span class="text-xs font-semibold px-3 py-1 rounded-full bg-[#CFFFBC] text-black shadow">
-                  Collectif
+
+                <!-- ✅ Badge Solo/Collectif (réel) -->
+                <span
+                  class="text-xs font-semibold px-3 py-1 rounded-full bg-[#CFFFBC] text-black shadow"
+                >
+                  {{ item.typeSujet === "solo" ? "Solo" : item.typeSujet === "collectif" ? "Collectif" : "—" }}
                 </span>
               </div>
 
@@ -252,10 +303,12 @@ const projetsFiltres = computed(() => {
                   </span>
                 </div>
 
-                <!-- ligne membres (placeholder maquette) -->
+                <!-- ✅ Membres du groupe (réel) -->
                 <div class="mt-4 text-white/70 text-sm flex items-center gap-2">
                   <span class="text-[#CFFFBC]">👤</span>
-                  <span>—</span>
+                  <span class="line-clamp-1">
+                    {{ formatMembres(item.projet.id) }}
+                  </span>
                 </div>
               </div>
             </RouterLink>
