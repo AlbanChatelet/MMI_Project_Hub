@@ -39,6 +39,24 @@ const isOwner = computed(() => {
   return uid && cmd && String(uid) === String(cmd);
 });
 
+const commanditaireAvatarUrl = (u) => {
+  if (!u) return null;
+  const file = u.avatar || u.photo || u.image;
+  if (!file) return null;
+  try {
+    return pb.files.getURL(u, file);
+  } catch {
+    return null;
+  }
+};
+
+const commanditaireInitial = (u) => {
+  const name =
+    u?.name || u?.username || u?.email || "";
+  return name ? name.charAt(0).toUpperCase() : "?";
+};
+
+
 const canEditSujet = computed(() => {
   if (!authUser.value?.id) return false;
   if (userType.value === "admin") return true;
@@ -410,17 +428,37 @@ onMounted(async () => {
                 ⏳ En attente de vérification
               </span>
 
-              <span class="text-white/60 text-sm">
-                Commanditaire :
-                <span class="text-white font-semibold">
-                  {{
-                    sujet?.expand?.commanditaire?.name
-                      || sujet?.expand?.commanditaire?.username
-                      || sujet?.expand?.commanditaire?.email
-                      || "Non renseigné"
-                  }}
-                </span>
-              </span>
+              <div class="flex items-center gap-2 text-sm text-white/60">
+  <span>Commanditaire :</span>
+
+  <div class="flex items-center gap-2">
+    <!-- Avatar -->
+    <div
+      class="w-6 h-6 rounded-full overflow-hidden border border-white/10 bg-white/5 flex items-center justify-center text-xs font-bold text-white"
+    >
+      <img
+        v-if="commanditaireAvatarUrl(sujet?.expand?.commanditaire)"
+        :src="commanditaireAvatarUrl(sujet?.expand?.commanditaire)"
+        alt="Avatar commanditaire"
+        class="w-full h-full object-cover"
+      />
+      <span v-else>
+        {{ commanditaireInitial(sujet?.expand?.commanditaire) }}
+      </span>
+    </div>
+
+    <!-- Nom -->
+    <span class="text-white font-semibold">
+      {{
+        sujet?.expand?.commanditaire?.name
+          || sujet?.expand?.commanditaire?.username
+          || sujet?.expand?.commanditaire?.email
+          || "Non renseigné"
+      }}
+    </span>
+  </div>
+</div>
+
             </div>
           </div>
 
