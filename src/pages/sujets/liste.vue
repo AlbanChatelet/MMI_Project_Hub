@@ -1,7 +1,7 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <script setup>
 import { ref, onMounted, computed } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute, useRouter, RouterLink } from "vue-router";
 import { pb } from "../../pb";
 import AppHeader from "@/components/AppHeader.vue";
 
@@ -43,7 +43,8 @@ onMounted(async () => {
     });
   } catch (e) {
     console.error("PB error", e, e?.data);
-    error.value = e?.data?.message || e?.message || "Erreur lors du chargement des sujets";
+    error.value =
+      e?.data?.message || e?.message || "Erreur lors du chargement des sujets";
   } finally {
     loading.value = false;
   }
@@ -79,7 +80,6 @@ onMounted(async () => {
           v-if="sujets.length"
           class="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
         >
-          <!-- ✅ RouterLink DANS le v-for -->
           <RouterLink
             v-for="s in sujets"
             :key="s.id"
@@ -89,8 +89,22 @@ onMounted(async () => {
             <article
               class="relative rounded-3xl overflow-hidden bg-black/40 border border-white/10 shadow-xl hover:border-white/20 transition"
             >
-              <!-- Placeholder “image” -->
-              <div class="w-full h-48 bg-gradient-to-br from-white/10 to-black/40" />
+              <!-- ✅ Image "image_marque" (dans la collection sujets) -->
+              <div class="relative w-full h-48">
+                <img
+                  v-if="s.image_marque"
+                  :src="pb.getFileUrl(s, s.image_marque)"
+                  alt="Image marque"
+                  class="w-full h-full object-cover"
+                  loading="lazy"
+                />
+                <div
+                  v-else
+                  class="w-full h-full bg-gradient-to-br from-white/10 to-black/40"
+                />
+                <!-- léger voile pour lisibilité -->
+                <div class="absolute inset-0 bg-black/20" />
+              </div>
 
               <div
                 class="absolute inset-x-0 bottom-0 p-6 bg-gradient-to-t from-black/90 via-black/50 to-transparent"
@@ -102,10 +116,10 @@ onMounted(async () => {
                 <p class="mt-2 text-white/80 text-sm">
                   <span class="font-semibold">Commanditaire :</span>
                   {{
-                    s.expand?.commanditaire?.name
-                    || s.expand?.commanditaire?.username
-                    || s.expand?.commanditaire?.email
-                    || "Non renseigné"
+                    s.expand?.commanditaire?.name ||
+                    s.expand?.commanditaire?.username ||
+                    s.expand?.commanditaire?.email ||
+                    "Non renseigné"
                   }}
                 </p>
               </div>
