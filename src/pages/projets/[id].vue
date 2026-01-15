@@ -49,6 +49,41 @@ const isMemberOfGroup = computed(() => {
   return Array.isArray(ids) ? ids.includes(uid) : false;
 });
 
+const etapeStatutKey = (statut) => {
+  // on normalise pour éviter: "En cours", "en cours", "en_cours ", etc.
+  return String(statut || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_"); // "en cours" => "en_cours"
+};
+
+const etapeBannerClass = (e) => {
+  const s = etapeStatutKey(e?.statut);
+
+  if (s === "done") return "bg-green-600/90 text-green-50";
+  if (s === "en_cours" || s === "encours") return "bg-orange-500/90 text-orange-50";
+
+  // par défaut => todo / inconnu
+  return "bg-red-600/90 text-red-50";
+};
+
+const etapeBannerText = (e) => {
+  const s = etapeStatutKey(e?.statut);
+  const date = e?.date_fin ? formatDateFr(e.date_fin) : null;
+
+  if (s === "done") {
+    return date ? `✅ Terminé le ${date}` : "✅ Terminé";
+  }
+
+  if (s === "en_cours" || s === "encours") {
+    return date ? `🚧 En cours – à finir pour le ${date}` : "🚧 En cours";
+  }
+
+  // todo / inconnu
+  return date ? `⏱️ À faire pour le ${date}` : "⏱️ À faire";
+};
+
+
 // droits d'édition (groupe)
 const canEdit = computed(() => isMemberOfGroup.value);
 
@@ -654,7 +689,11 @@ onMounted(async () => {
     const groupeId = projet.value?.groupe;
 
     if (groupeId) {
-      groupe.value = await withTimeout(pb.collection("Groupe").getOne(groupeId), 15000, "Chargement groupe");
+      groupe.value = await withTimeout(
+        pb.collection("Groupe").getOne(groupeId),
+        15000,
+        "Chargement groupe"
+      );
 
       // Membres du groupe
       if (Array.isArray(groupe.value?.membres) && groupe.value.membres.length > 0) {
@@ -710,10 +749,10 @@ onMounted(async () => {
             alt="Visuel du projet"
             class="w-full h-full object-cover"
           />
-          <div v-else class="w-full h-full bg-gradient-to-br from-white/10 to-black/50" />
+          <div v-else class="w-full h-full bg-gradient-to-br from-white/10 to-black/50"></div>
         </div>
 
-        <div class="absolute inset-0 bg-black/55" />
+        <div class="absolute inset-0 bg-black/55"></div>
 
         <div class="absolute inset-0">
           <div class="max-w-6xl mx-auto px-6 pt-48">
@@ -786,10 +825,10 @@ onMounted(async () => {
               <p class="mt-3 text-white/80 text-sm">
                 <span class="font-semibold">Commanditaire :</span>
                 {{
-                  sujet?.expand?.commanditaire?.name
-                  || sujet?.expand?.commanditaire?.username
-                  || sujet?.expand?.commanditaire?.email
-                  || "Non renseigné"
+                  sujet?.expand?.commanditaire?.name ||
+                  sujet?.expand?.commanditaire?.username ||
+                  sujet?.expand?.commanditaire?.email ||
+                  "Non renseigné"
                 }}
               </p>
             </div>
@@ -823,10 +862,7 @@ onMounted(async () => {
             </div>
 
             <div v-else class="mt-4">
-              <div
-                v-if="membres.length"
-                class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-              >
+              <div v-if="membres.length" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div
                   v-for="m in membres"
                   :key="m.id"
@@ -856,10 +892,7 @@ onMounted(async () => {
                 </div>
               </div>
 
-              <div
-                v-else
-                class="rounded-2xl border border-white/10 bg-black/20 p-5 text-white/70"
-              >
+              <div v-else class="rounded-2xl border border-white/10 bg-black/20 p-5 text-white/70">
                 Le groupe existe, mais aucun membre n’est associé.
               </div>
             </div>
@@ -889,10 +922,7 @@ onMounted(async () => {
             <div>
               <h2 class="font-bold text-white mb-4">Compétences mobilisées</h2>
 
-              <div
-                v-if="(sujet?.competences || []).length"
-                class="grid grid-cols-1 sm:grid-cols-2 gap-3"
-              >
+              <div v-if="(sujet?.competences || []).length" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div
                   v-for="c in sujet.competences"
                   :key="c"
@@ -944,7 +974,10 @@ onMounted(async () => {
               </span>
             </div>
 
-            <p v-if="commentaireError && !showAddCommentaire" class="mt-3 text-sm text-red-300 whitespace-pre-wrap">
+            <p
+              v-if="commentaireError && !showAddCommentaire"
+              class="mt-3 text-sm text-red-300 whitespace-pre-wrap"
+            >
               {{ commentaireError }}
             </p>
 
@@ -964,7 +997,9 @@ onMounted(async () => {
               >
                 <div class="flex items-start justify-between gap-4">
                   <div class="flex items-center gap-3 min-w-0">
-                    <div class="w-10 h-10 rounded-full overflow-hidden border border-white/10 bg-white/5 grid place-items-center">
+                    <div
+                      class="w-10 h-10 rounded-full overflow-hidden border border-white/10 bg-white/5 grid place-items-center"
+                    >
                       <img
                         v-if="userAvatarUrl(c?.expand?.id_auteur)"
                         :src="userAvatarUrl(c?.expand?.id_auteur)"
@@ -986,7 +1021,9 @@ onMounted(async () => {
                     </div>
                   </div>
 
-                  <span class="px-3 py-1 rounded-full bg-[#CFFFBC]/10 border border-[#CFFFBC]/20 text-xs font-bold text-[#CFFFBC]">
+                  <span
+                    class="px-3 py-1 rounded-full bg-[#CFFFBC]/10 border border-[#CFFFBC]/20 text-xs font-bold text-[#CFFFBC]"
+                  >
                     Prof
                   </span>
                 </div>
@@ -997,18 +1034,12 @@ onMounted(async () => {
               </article>
             </div>
 
-            <div
-              v-else
-              class="mt-4 rounded-2xl border border-white/10 bg-black/20 p-5 text-white/70"
-            >
+            <div v-else class="mt-4 rounded-2xl border border-white/10 bg-black/20 p-5 text-white/70">
               Aucun commentaire pour le moment.
             </div>
 
             <!-- MODAL AJOUT COMMENTAIRE -->
-            <div
-              v-if="showAddCommentaire"
-              class="fixed inset-0 z-50 bg-black/60 grid place-items-center px-6"
-            >
+            <div v-if="showAddCommentaire" class="fixed inset-0 z-50 bg-black/60 grid place-items-center px-6">
               <div class="w-full max-w-xl rounded-3xl bg-[#1B2130] border border-white/10 shadow-xl p-7">
                 <div class="flex items-start justify-between gap-4">
                   <h3 class="text-lg font-extrabold text-white">Ajouter un commentaire</h3>
@@ -1025,7 +1056,7 @@ onMounted(async () => {
                       v-model="commentaireForm.contenu"
                       class="mt-1 w-full min-h-[130px] rounded-xl bg-black/20 border border-white/10 px-4 py-3 text-white outline-none focus:border-white/25"
                       placeholder="Écrire un retour pédagogique..."
-                    />
+                    ></textarea>
                   </div>
 
                   <p v-if="commentaireError" class="text-sm text-red-300 whitespace-pre-wrap">
@@ -1106,18 +1137,12 @@ onMounted(async () => {
               </a>
             </div>
 
-            <div
-              v-else
-              class="mt-4 rounded-2xl border border-white/10 bg-black/20 p-5 text-white/70"
-            >
+            <div v-else class="mt-4 rounded-2xl border border-white/10 bg-black/20 p-5 text-white/70">
               Aucun livrable pour le moment.
             </div>
 
             <!-- MODAL : Ajouter un livrable -->
-            <div
-              v-if="showAddLivrable"
-              class="fixed inset-0 z-50 bg-black/60 grid place-items-center px-6"
-            >
+            <div v-if="showAddLivrable" class="fixed inset-0 z-50 bg-black/60 grid place-items-center px-6">
               <div class="w-full max-w-xl rounded-3xl bg-[#1B2130] border border-white/10 shadow-xl p-7">
                 <div class="flex items-start justify-between gap-4">
                   <h3 class="text-lg font-extrabold text-white">Ajouter un document</h3>
@@ -1175,11 +1200,7 @@ onMounted(async () => {
                       <p class="mt-2 text-white/80 font-semibold">Déposez le fichier pour le téléverser</p>
                       <p class="text-sm text-white/60 underline">Naviguer dans les fichiers</p>
 
-                      <input
-                        type="file"
-                        class="mt-4 block w-full text-sm text-white/70"
-                        @change="onLivrableFileChange"
-                      />
+                      <input type="file" class="mt-4 block w-full text-sm text-white/70" @change="onLivrableFileChange" />
 
                       <p v-if="livrableForm.fichier" class="mt-3 text-sm text-[#CFFFBC] font-semibold">
                         Sélectionné : {{ livrableForm.fichier.name }}
@@ -1259,10 +1280,7 @@ onMounted(async () => {
                       {{ e.titre }}
                     </h3>
 
-                    <div
-                      v-if="typeof e.progress === 'number'"
-                      class="text-3xl font-extrabold text-[#CFFFBC]"
-                    >
+                    <div v-if="typeof e.progress === 'number'" class="text-3xl font-extrabold text-[#CFFFBC]">
                       {{ e.progress }}%
                     </div>
                   </div>
@@ -1273,12 +1291,7 @@ onMounted(async () => {
                         class="w-7 h-7 rounded-full overflow-hidden border border-white/10 bg-white/5 grid place-items-center"
                         title="Assigné"
                       >
-                        <img
-                          v-if="userAvatarUrl(u)"
-                          :src="userAvatarUrl(u)"
-                          alt=""
-                          class="w-full h-full object-cover"
-                        />
+                        <img v-if="userAvatarUrl(u)" :src="userAvatarUrl(u)" alt="" class="w-full h-full object-cover" />
                         <span v-else class="text-[10px] font-extrabold text-white/70">
                           {{ initials(userDisplayName(u)) }}
                         </span>
@@ -1296,34 +1309,32 @@ onMounted(async () => {
                   </p>
                 </div>
 
+                <!-- ✅ Barre de progression (div bien fermé) -->
                 <div v-if="typeof e.progress === 'number'" class="h-2 bg-black/30">
                   <div
                     class="h-full bg-[#CFFFBC]"
                     :style="{ width: `${Math.max(0, Math.min(100, e.progress))}%` }"
-                  />
+                  ></div>
                 </div>
 
                 <div
-                  v-if="e.date_fin"
-                  class="px-5 py-3 bg-red-600/90 text-red-50 text-sm font-semibold flex items-center gap-2"
-                >
-                  ⏱️ A finir pour le {{ formatDateFr(e.date_fin) }}
-                </div>
+  class="px-5 py-3 text-sm font-semibold flex items-center gap-2"
+  :class="etapeBannerClass(e)"
+>
+  {{ etapeBannerText(e) }}
+</div>
+
+
+
               </article>
             </div>
 
-            <div
-              v-else
-              class="mt-4 rounded-2xl border border-white/10 bg-black/20 p-5 text-white/70"
-            >
+            <div v-else class="mt-4 rounded-2xl border border-white/10 bg-black/20 p-5 text-white/70">
               Aucune étape pour le moment.
             </div>
 
             <!-- MODAL création étape -->
-            <div
-              v-if="showAddEtape"
-              class="fixed inset-0 z-50 bg-black/60 grid place-items-center px-6"
-            >
+            <div v-if="showAddEtape" class="fixed inset-0 z-50 bg-black/60 grid place-items-center px-6">
               <div class="w-full max-w-xl rounded-3xl bg-[#1B2130] border border-white/10 shadow-xl p-7">
                 <div class="flex items-start justify-between gap-4">
                   <h3 class="text-lg font-extrabold text-white">Ajouter une étape</h3>
@@ -1349,7 +1360,7 @@ onMounted(async () => {
                       v-model="etapeForm.description"
                       class="mt-1 w-full min-h-[90px] rounded-xl bg-black/20 border border-white/10 px-4 py-3 text-white outline-none focus:border-white/25"
                       placeholder="Détails..."
-                    />
+                    ></textarea>
                   </div>
 
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1406,22 +1417,10 @@ onMounted(async () => {
                         :key="u.id"
                         class="flex items-center gap-3 rounded-xl bg-white/5 border border-white/10 px-4 py-3 cursor-pointer hover:bg-white/10"
                       >
-                        <input
-                          type="checkbox"
-                          class="accent-[#CFFFBC]"
-                          :value="u.id"
-                          v-model="etapeForm.membres"
-                        />
+                        <input type="checkbox" class="accent-[#CFFFBC]" :value="u.id" v-model="etapeForm.membres" />
 
-                        <div
-                          class="w-8 h-8 rounded-full overflow-hidden border border-white/10 bg-white/5 grid place-items-center"
-                        >
-                          <img
-                            v-if="userAvatarUrl(u)"
-                            :src="userAvatarUrl(u)"
-                            alt=""
-                            class="w-full h-full object-cover"
-                          />
+                        <div class="w-8 h-8 rounded-full overflow-hidden border border-white/10 bg-white/5 grid place-items-center">
+                          <img v-if="userAvatarUrl(u)" :src="userAvatarUrl(u)" alt="" class="w-full h-full object-cover" />
                           <span v-else class="text-[10px] font-extrabold text-white/70">
                             {{ initials(userDisplayName(u)) }}
                           </span>
