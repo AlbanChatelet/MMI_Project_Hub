@@ -40,6 +40,10 @@ const competences = ref([]);
 const imageMarqueFile = ref(null);
 const sujetPdfFile = ref(null);
 
+// ✅ refs pour reset les inputs file (sinon parfois on ne peut pas re-choisir le même fichier)
+const imageInputRef = ref(null);
+const pdfInputRef = ref(null);
+
 // auth
 const authUser = computed(() => pb.authStore?.record || null);
 const isLoggedIn = computed(() => !!authUser.value?.id);
@@ -72,6 +76,10 @@ const resetForm = () => {
   sujetPdfFile.value = null;
   success.value = false;
   error.value = "";
+
+  // ✅ reset des champs file
+  if (imageInputRef.value) imageInputRef.value.value = "";
+  if (pdfInputRef.value) pdfInputRef.value.value = "";
 };
 
 const submit = async () => {
@@ -128,7 +136,6 @@ const submit = async () => {
     loading.value = false;
   }
 };
-
 </script>
 
 <template>
@@ -241,13 +248,21 @@ const submit = async () => {
             <!-- Description -->
             <div>
               <label class="block mb-2 text-white/80">Description*</label>
-              <textarea v-model="description" rows="5" class="w-full bg-[#151A24]/60 border border-white/15 rounded-xl px-4 py-3" />
+              <textarea
+                v-model="description"
+                rows="5"
+                class="w-full bg-[#151A24]/60 border border-white/15 rounded-xl px-4 py-3"
+              />
             </div>
 
             <!-- Objectifs -->
             <div>
               <label class="block mb-2 text-white/80">Objectifs*</label>
-              <textarea v-model="objectifs" rows="4" class="w-full bg-[#151A24]/60 border border-white/15 rounded-xl px-4 py-3" />
+              <textarea
+                v-model="objectifs"
+                rows="4"
+                class="w-full bg-[#151A24]/60 border border-white/15 rounded-xl px-4 py-3"
+              />
             </div>
 
             <!-- Compétences -->
@@ -267,6 +282,60 @@ const submit = async () => {
                   {{ c }}
                 </button>
               </div>
+              <p class="text-white/50 text-sm mt-2">Sélection multiple autorisée.</p>
+            </div>
+
+            <!-- ✅ Documents -->
+            <div>
+              <label class="block mb-3 text-white/80">Documents</label>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- Image de marque -->
+                <label
+                  class="bg-[#151A24]/60 p-5 rounded-2xl flex flex-col items-center gap-2 border border-white/15 cursor-pointer hover:border-white/40 transition"
+                >
+                  <div class="w-11 h-11 rounded-xl bg-[#CCFFBC]/20 flex items-center justify-center">
+                    📷
+                  </div>
+                  <span class="text-sm text-white/80">Image de marque</span>
+                  <span class="text-xs text-white/60">
+                    {{ imageMarqueFile ? imageMarqueFile.name : "Aucun fichier" }}
+                  </span>
+
+                  <input
+                    ref="imageInputRef"
+                    type="file"
+                    accept="image/*"
+                    class="hidden"
+                    @change="onPickImageMarque"
+                  />
+                </label>
+
+                <!-- Sujet PDF -->
+                <label
+                  class="bg-[#151A24]/60 p-5 rounded-2xl flex flex-col items-center gap-2 border border-white/15 cursor-pointer hover:border-white/40 transition"
+                >
+                  <div class="w-11 h-11 rounded-xl bg-[#CCFFBC]/20 flex items-center justify-center">
+                    📄
+                  </div>
+                  <span class="text-sm text-white/80">Sujet (PDF)</span>
+                  <span class="text-xs text-white/60">
+                    {{ sujetPdfFile ? sujetPdfFile.name : "Aucun fichier" }}
+                  </span>
+
+                  <input
+                    ref="pdfInputRef"
+                    type="file"
+                    accept="application/pdf"
+                    class="hidden"
+                    @change="onPickSujetPdf"
+                  />
+                </label>
+              </div>
+
+              <p class="text-white/50 text-sm mt-2">
+                Optionnel : ajoutez une image (logo/visuel) et/ou un PDF pour préciser le besoin.
+              </p>
             </div>
 
             <!-- Email -->
