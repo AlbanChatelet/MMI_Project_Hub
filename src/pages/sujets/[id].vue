@@ -142,22 +142,32 @@ const availableUsers = computed(() => {
   return filteredUsers.value.filter((u) => !set.has(u.id));
 });
 
+// ✅✅✅ FIX : on charge UNIQUEMENT les étudiants avec le champ réel "type_utilisateur"
+// + on désactive l’auto-cancel pour éviter AbortError
 const loadUsers = async () => {
   usersLoading.value = true;
   usersError.value = "";
   try {
-    users.value = await pb.collection("users").getFullList({ sort: "created" });
+    const list = await pb.collection("users").getFullList({
+      sort: "created",
+      filter: `type_utilisateur="etudiant"`,
+      $autoCancel: false,
+    });
+
+    users.value = list || [];
   } catch (e) {
+    // ✅ AbortError = auto-cancel => on ignore silencieusement
+    if (e?.name === "AbortError" || e?.message?.toLowerCase?.().includes("autocancelled")) {
+      return;
+    }
     console.error(e);
-    usersError.value =
-      e?.data?.message || e?.message || "Impossible de charger la liste des utilisateurs.";
+    usersError.value = e?.data?.message || e?.message || "Impossible de charger la liste des utilisateurs.";
   } finally {
     usersLoading.value = false;
   }
 };
 
 const openModal = async () => {
-  // ✅ si pas vérifié => pas de modale
   if (!canActuallyRequest.value) return;
 
   modalOpen.value = true;
@@ -202,10 +212,6 @@ const createGroup = async () => {
     if (!sujet.value) throw new Error("Sujet non chargé.");
     if (selectedIds.value.length === 0) throw new Error("Ajoute au moins 1 membre dans le groupe.");
 
-    // ✅ promo(s) venant de l'utilisateur connecté
-    // users.promotion peut être :
-    // - string (id d'une promo)
-    // - array (plusieurs ids)
     const promoRaw = authUser.value?.promotion;
 
     const promoIds = Array.isArray(promoRaw)
@@ -235,8 +241,6 @@ const createGroup = async () => {
     fd.append("id_sujet", sujet.value.id);
     fd.append("groupe", createdGroup.id);
 
-    // ✅ Projet.promo est un champ relationnel MULTIPLE :
-    // => FormData : append plusieurs fois la même clé
     promoIds.forEach((pid) => fd.append("promo", pid));
 
     if (sujet.value.image_marque) {
@@ -254,12 +258,11 @@ const createGroup = async () => {
 
     const createdProject = await pb.collection("Projet").create(fd);
 
-    // 3) ✅ Mise à jour du groupe : relation "projet" => id du projet créé
+    // 3) ✅ Mise à jour du groupe : relation "projet"
     await pb.collection("Groupe").update(createdGroup.id, {
-      projet: createdProject.id, // champ relationnel "projet" dans Groupe
+      projet: createdProject.id,
     });
 
-    // Redirect
     router.push(`/projets/${createdProject.id}`);
   } catch (e) {
     console.error(e);
@@ -295,8 +298,6 @@ const editForm = ref({
   competences: [],
   image_marque: null,
   sujet_pdf: null,
-
-  // ✅ nouveau champ
   verification: false,
 });
 
@@ -330,8 +331,6 @@ const openEdit = () => {
     competences: Array.isArray(sujet.value.competences) ? [...sujet.value.competences] : [],
     image_marque: null,
     sujet_pdf: null,
-
-    // ✅ nouveau champ
     verification: Boolean(sujet.value.verification),
   };
 
@@ -356,8 +355,6 @@ const saveEdit = async () => {
     fd.append("description", editForm.value.description.trim());
     fd.append("objectifs", editForm.value.objectifs.trim());
     fd.append("mail", editForm.value.mail.trim());
-
-    // ✅ nouveau champ
     fd.append("verification", String(Boolean(editForm.value.verification)));
 
     (editForm.value.competences || []).forEach((c) => fd.append("competences", c));
@@ -448,7 +445,6 @@ onMounted(async () => {
                 <span>Commanditaire :</span>
 
                 <div class="flex items-center gap-2">
-                  <!-- Avatar -->
                   <div
                     class="w-6 h-6 rounded-full overflow-hidden border border-white/10 bg-white/5 flex items-center justify-center text-xs font-bold text-white"
                   >
@@ -463,7 +459,6 @@ onMounted(async () => {
                     </span>
                   </div>
 
-                  <!-- Nom -->
                   <span class="text-white font-semibold">
                     {{
                       sujet?.expand?.commanditaire?.name
@@ -478,7 +473,6 @@ onMounted(async () => {
           </div>
 
           <div class="flex items-center gap-3">
-            <!-- ✅ Bouton modifier (prof/admin) -->
             <button
               v-if="canEditSujet"
               type="button"
@@ -488,11 +482,7 @@ onMounted(async () => {
               ✎ Modifier le sujet
             </button>
 
-            <button
-              type="button"
-              class="text-[#CFFFBC] hover:underline"
-              @click="router.push('/sujets')"
-            >
+            <button type="button" class="text-[#CFFFBC] hover:underline" @click="router.push('/sujets')">
               ← Retour
             </button>
           </div>
@@ -500,7 +490,6 @@ onMounted(async () => {
 
         <!-- Contenu (2 colonnes) -->
         <div class="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <!-- Colonne gauche -->
           <div class="lg:col-span-2 space-y-8">
             <section class="rounded-2xl border border-white/10 bg-black/20 p-6">
               <h2 class="text-xl font-extrabold mb-3">Description</h2>
@@ -533,7 +522,6 @@ onMounted(async () => {
             </section>
           </div>
 
-          <!-- Colonne droite -->
           <aside class="space-y-6">
             <section class="rounded-2xl border border-white/10 bg-black/20 p-5">
               <h3 class="font-extrabold mb-3">Image de marque</h3>
@@ -573,7 +561,6 @@ onMounted(async () => {
               </p>
             </section>
 
-            <!-- ✅ Bouton demander le projet (desktop) seulement si étudiant -->
             <button
               v-if="canRequestProject"
               type="button"
@@ -590,7 +577,6 @@ onMounted(async () => {
           </aside>
         </div>
 
-        <!-- ✅ Bouton demander le projet (mobile / sticky) seulement si étudiant -->
         <div
           v-if="canRequestProject"
           class="lg:hidden fixed left-0 right-0 bottom-0 p-4 bg-black/40 backdrop-blur border-t border-white/10"
@@ -739,14 +725,8 @@ onMounted(async () => {
 
             <div class="rounded-xl bg-black/20 border border-white/10 p-4">
               <label class="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  v-model="editForm.verification"
-                  class="accent-[#CFFFBC] w-5 h-5"
-                />
-                <span class="font-semibold text-white">
-                  Sujet vérifié (demandable par les étudiants)
-                </span>
+                <input type="checkbox" v-model="editForm.verification" class="accent-[#CFFFBC] w-5 h-5" />
+                <span class="font-semibold text-white">Sujet vérifié (demandable par les étudiants)</span>
               </label>
               <p class="mt-2 text-sm text-white/60">
                 Si décoché, les étudiants verront “En attente de vérification”.
@@ -817,11 +797,7 @@ onMounted(async () => {
 
               <p class="mt-3 font-semibold text-[#CFFFBC]">{{ userDisplayName(u) }}</p>
 
-              <button
-                type="button"
-                class="mt-3 text-xs text-white/60 hover:text-red-300"
-                @click="removeMember(u.id)"
-              >
+              <button type="button" class="mt-3 text-xs text-white/60 hover:text-red-300" @click="removeMember(u.id)">
                 Retirer
               </button>
             </div>
@@ -847,8 +823,6 @@ onMounted(async () => {
 
             <div v-if="addingSelectOpen" class="mt-3 rounded-xl border border-white/10 bg-black/20 p-4">
               <div class="flex flex-col gap-3">
-                
-
                 <select
                   v-model="selectedToAdd"
                   class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm outline-none focus:border-white/30"
